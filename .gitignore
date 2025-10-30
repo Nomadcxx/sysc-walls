@@ -1,0 +1,90 @@
+# Project specific files
+opencode.json
+AGENTS.md
+IMPLEMENTATION_SUMMARY.md
+PROJECT_PLAN.md
+ROADMAP.md
+*.log
+
+# Beads issue tracker
+.beads/beads.db
+.beads/config.json
+.beads/issues.jsonl
+
+# AI and development tools
+*.ai
+*.claude*
+*.cursor*
+*.codeium*
+.temp/
+.tmp/
+.cache/
+*.backup
+*~
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# OS generated files
+Thumbs.db
+.DS_Store
+
+# Go build files (but not directories)
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Built binaries (exact filenames only)
+/client
+/daemon
+/display
+/installer
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# Local configuration files
+.config/
+
+# Generated files
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage.txt
+
+# nyc test coverage
+.nyc_output
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# User configuration
+~/.config/sysc-walls/
+
+# Subdirectories to ignore (embedded repos)
+hypridle/
+sysc-Go/

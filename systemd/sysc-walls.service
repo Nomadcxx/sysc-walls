@@ -1,0 +1,12 @@
+[Unit]
+Description=sysc-walls idle daemon
+After=graphical.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sysc-walls-daemon -start
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=default.target

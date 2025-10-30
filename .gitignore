@@ -1,32 +1,34 @@
 # Project specific files
 opencode.json
 AGENTS.md
+AGENTS.*
+AGENTS-LLMMETA.md
+
+# Development and AI materials
 IMPLEMENTATION_SUMMARY.md
 PROJECT_PLAN.md
 ROADMAP.md
-*.log
+*.md.bak
+*.md.orig
+*.txt.bak
+*.txt.orig
 
 # Beads issue tracker
 .beads/beads.db
 .beads/config.json
 .beads/issues.jsonl
-
-# AI and development tools
-*.ai
-*.claude*
-*.cursor*
-*.codeium*
-.temp/
-.tmp/
-.cache/
-*.backup
-*~
+.beads/issues.jsonl.bak
 
 # IDE and editor files
 .vscode/
+.vscode/settings.json
+.vscode/launch.json
 .idea/
 *.swp
 *.swo
+*~
+
+# OS generated files
 .DS_Store
 .DS_Store?
 ._*
@@ -34,6 +36,85 @@ ROADMAP.md
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Compiled binaries (development only)
+client
+daemon
+display
+installer
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.mod
+*.sum
+
+# Test coverage
+*.cover
+*.coverprofile
+coverage.txt
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.bak
+*~
+
+# Runtime files
+*.pid
+*.seed
+*.pid.lock
+
+# Directory specific
+node_modules/
+__pycache__/
+.pytest_cache/
+.env
+.env.local
+.env.*.local
+
+# AI and development tools
+.ai/
+.agent/
+.temp/
+.workspace/
+*.ai-cache/
+*.session/
+*.conversation/
+.conversation.*/
+
+# Backup files
+*.backup
+*.bak
+*.orig
+*.old
+*.save
+
+# OS and platform specific
+.DS_Store?
+ehthumbs.db
+Icon?
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Debugging
+*.debug
+*.debug.log
+debug.log
+*.trace
+
+# Configuration files (example/template only)
+*.conf.example
+*.conf.template
+example.conf
+sample.conf
 
 # OS generated files
 Thumbs.db

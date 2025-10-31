@@ -30,7 +30,7 @@ func NewConfig() *Config {
 		minDuration:        30 * time.Second,  // 30 seconds default
 		debug:              false,
 		animationEffect:    "matrix",
-		animationTheme:     "dracula",
+		animationTheme:     "nord",
 		cycleAnimations:    true,
 		terminalKitty:      true,
 		terminalFullscreen: true,
@@ -347,15 +347,11 @@ func (c *Config) GetTerminalArgs() []string {
 
 // GetScreensaverCommand returns the command to launch the screensaver
 func (c *Config) GetScreensaverCommand() string {
-	terminal := c.GetTerminalLauncher()
-	args := c.GetTerminalArgs()
 	effect := c.GetAnimationEffect()
 	theme := c.GetAnimationTheme()
 
-	// Build the command
-	parts := []string{terminal}
-	parts = append(parts, args...)
-	parts = append(parts, "sysc-walls", "display", "--effect", effect, "--theme", theme)
+	// Build the command to use the display binary directly
+	parts := []string{"/usr/local/bin/sysc-walls-display", "--effect", effect, "--theme", theme}
 
 	return strings.Join(parts, " ")
 }

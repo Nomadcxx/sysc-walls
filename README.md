@@ -1,8 +1,8 @@
 # sysc-walls
 
-> ⚠️ **IN DEVELOPMENT** - This project is actively being developed
+> IN DEVELOPMENT - This project is actively being developed
 
-A terminal-based screensaver that combines beautiful animations from [sysc-Go](https://github.com/Nomadcxx/sysc-Go) with intelligent idle detection. Features fullscreen kitty terminal integration and systemd service support.
+A terminal-based screensaver that combines animations from sysc-Go with intelligent idle detection. Features direct binary execution and systemd service support.
 
 ## Quick Start
 
@@ -14,9 +14,9 @@ sudo ./installer
 
 ### Manual Build
 ```bash
-go build ./cmd/daemon/
-go build ./cmd/display/ 
-go build ./cmd/client/
+go build -o sysc-walls-daemon ./cmd/daemon/
+go build -o sysc-walls-display ./cmd/display/
+go build -o sysc-walls-client ./cmd/client/
 ```
 
 ## Usage
@@ -24,10 +24,7 @@ go build ./cmd/client/
 ### Start the Screensaver
 ```bash
 # Test screensaver immediately
-sysc-walls-client test matrix nord
-
-# Or run specific animation  
-sysc-walls-client run fire dracula
+./sysc-walls-daemon -test
 
 # Start the idle daemon (5min timeout)
 sudo systemctl start sysc-walls.service
@@ -37,7 +34,7 @@ sudo systemctl start sysc-walls.service
 ```bash
 # Set animation and theme
 sysc-walls-client set effect matrix
-sysc-walls-client set theme dracula
+sysc-walls-client set theme nord
 
 # Set idle timeout (5 minutes)
 sysc-walls-client set timeout 5m
@@ -61,46 +58,45 @@ systemctl status sysc-walls.service
 
 ## Features
 
-✨ **Beautiful animations** from sysc-Go library  
-⏰ **Smart idle detection** for Wayland and X11  
-🚀 **Systemd integration** for auto-start  
-🎨 **Customizable themes** and animations  
-📱 **CLI management** for easy configuration  
-⚡ **Resource efficient** terminal screensaver  
+- Terminal animations using sysc-Go library
+- Smart idle detection for Wayland and X11
+- Systemd service integration for auto-start
+- Direct binary execution (no terminal dependency)
+- CLI management for configuration
+- Resource efficient screensaver
 
 ## Animation Effects
 
-Available animations: `matrix`, `fire`, `fireworks`, `rain`, `beams`, `beam-text`, `decrypt`, `pour`, `aquarium`, `print`
+Available animations: matrix, fire, fireworks, rain, beams, beam-text, decrypt, pour, aquarium, print
 
-Themes: `dracula`, `gruvbox`, `nord`, `ocean`, `forest`
+Available themes: dracula, gruvbox, nord, tokyo-night, catppuccin, material, solarized, monochrome, transishardjob
 
 ## Configuration
 
-Config file: `~/.config/sysc-walls/daemon.conf`
+Config file: ~/.config/sysc-walls/daemon.conf
 
 ```ini
 [idle]
 timeout = 5m          # Idle timeout
 min_duration = 30s    # Minimum screensaver duration
 
-[animation] 
+[animation]
 effect = matrix       # Animation effect
-theme = dracula       # Color theme
+theme = nord          # Color theme
 cycle = true          # Cycle through animations
 
-[terminal]
-kitty = true          # Use kitty terminal
-fullscreen = true     # Fullscreen mode
+[daemon]
+debug = false         # Enable debug logging
 ```
 
 ## Development
 
-Built with Go using sysc-Go animations library. Features:
+Built with Go using sysc-Go animations library:
 
-- **Daemon**: Idle detection and screensaver management
-- **Display**: Animation rendering with terminal integration  
-- **Client**: Intuitive CLI for configuration
-- **Systemd**: Automatic service management
+- Daemon: Idle detection and screensaver management
+- Display: Animation rendering with direct execution
+- Client: CLI configuration management
+- Systemd: Service integration
 
 ## License
 

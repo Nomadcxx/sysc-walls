@@ -255,8 +255,28 @@ func (d *IdleDetector) startX11Monitor(ctx context.Context) {
 				idleMs := parseInt(string(output))
 				idleTime := time.Duration(idleMs) * time.Millisecond
 
-				// Update the last active time based on idle time
-				d.lastActive = time.Now().Add(-idleTime)
+				// Check if we've exceeded the idle threshold
+				if idleTime >= d.idleTimeout {
+					// Fire idle event
+					select {
+					case d.idleChan <- struct{}{}:
+					default:
+						// Channel already has a value, don't block
+					}
+				} else {
+					// We're active, fire resume event and clear idle
+					select {
+					case d.resumeChan <- struct{}{}:
+					default:
+						// Channel already has a value, don't block
+					}
+
+					// Clear any pending idle event
+					select {
+					case <-d.idleChan:
+					default:
+					}
+				}
 
 				if d.config.IsDebug() {
 					log.Printf("X11 idle time: %v", idleTime)
@@ -264,6 +284,78 @@ func (d *IdleDetector) startX11Monitor(ctx context.Context) {
 			}
 		}
 	}()
+
+	// Start input device monitoring for immediate activity detection
+	go d.startInputDeviceMonitor(ctx)
+}
+
+// startInputDeviceMonitor monitors input devices for immediate activity detection
+func (d *IdleDetector) startInputDeviceMonitor(ctx context.Context) {
+	// Simple file stat monitoring of input devices as a proxy for activity
+	// This is a basic approach that works on many systems
+
+	// Check common input device paths
+	devicePaths := []string{
+		"/dev/input/event0",
+		"/dev/input/event1",
+		"/dev/input/event2",
+		"/dev/input/mouse0",
+		"/dev/input/mice",
+	}
+
+	// Get initial stat times
+	lastModTimes := make(map[string]time.Time)
+	for _, path := range devicePaths {
+		if info, err := os.Stat(path); err == nil {
+			lastModTimes[path] = info.ModTime()
+		}
+	}
+
+	ticker := time.NewTicker(100 * time.Millisecond) // Check frequently for activity
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			activityDetected := false
+
+			// Check if any input device files have been modified
+			for _, path := range devicePaths {
+				if info, err := os.Stat(path); err == nil {
+					if modTime, exists := lastModTimes[path]; exists {
+						if info.ModTime().After(modTime) {
+							// Device was accessed, activity detected
+							activityDetected = true
+							lastModTimes[path] = info.ModTime()
+							break
+						}
+					} else {
+						lastModTimes[path] = info.ModTime()
+					}
+				}
+			}
+
+			if activityDetected {
+				// Fire resume event immediately
+				select {
+				case d.resumeChan <- struct{}{}:
+					if d.config.IsDebug() {
+						log.Println("Input device activity detected")
+					}
+				default:
+					// Channel already has a value, don't block
+				}
+
+				// Clear any pending idle event
+				select {
+				case <-d.idleChan:
+				default:
+				}
+			}
+		}
+	}
 }
 
 // MarkActive marks the system as active (e.g., on keyboard/mouse input)

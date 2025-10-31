@@ -4,13 +4,55 @@ package utils
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"strconv"
+	"strings"
 )
 
 // GetTerminalSize returns the current terminal dimensions
 func GetTerminalSize() (int, int, error) {
-	// Simple heuristic for terminal dimensions
-	// This doesn't rely on external libraries
-	return 80, 24, nil // Default to standard terminal dimensions
+	// For fullscreen usage, we need to detect actual terminal size
+	// Try multiple methods to get real dimensions
+
+	// Method 1: Use tput for terminal size (most reliable)
+	if cols, lines, err := getTerminalSizeTput(); err == nil {
+		return cols, lines, nil
+	}
+
+	// Method 2: Use environment variables (common for fullscreen terminals)
+	cols := 200 // Large default for fullscreen
+	lines := 60 // Large default for fullscreen
+
+	if colsEnv := os.Getenv("COLUMNS"); colsEnv != "" {
+		if colVal, err := strconv.Atoi(colsEnv); err == nil && colVal > 0 {
+			cols = colVal
+		}
+	}
+
+	if linesEnv := os.Getenv("LINES"); linesEnv != "" {
+		if lineVal, err := strconv.Atoi(linesEnv); err == nil && lineVal > 0 {
+			lines = lineVal
+		}
+	}
+
+	return cols, lines, nil
+}
+
+// getTerminalSizeTput gets terminal size using tput
+func getTerminalSizeTput() (int, int, error) {
+	// Try to use tput if available
+	cmd := exec.Command("tput", "cols")
+	if output, err := cmd.Output(); err == nil {
+		if cols, err := strconv.Atoi(strings.TrimSpace(string(output))); err == nil {
+			cmd = exec.Command("tput", "lines")
+			if output, err := cmd.Output(); err == nil {
+				if lines, err := strconv.Atoi(strings.TrimSpace(string(output))); err == nil {
+					return cols, lines, nil
+				}
+			}
+		}
+	}
+	return 0, 0, fmt.Errorf("tput method failed")
 }
 
 // SetupTerminal prepares the terminal for full-screen animations

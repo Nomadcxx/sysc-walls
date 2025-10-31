@@ -542,17 +542,36 @@ func loadASCIIHeader() []string {
 	data, err := os.ReadFile("ascii.txt")
 	if err == nil {
 		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-		// Add subtitle aligned with ASCII
-		lines = append(lines, "       TERMINAL SCREENSAVER INSTALLER")
+		// Pad all lines to same width so lipgloss centering doesn't mangle them
+		maxWidth := 0
+		for _, line := range lines {
+			if len([]rune(line)) > maxWidth {
+				maxWidth = len([]rune(line))
+			}
+		}
+		for i, line := range lines {
+			lineRunes := []rune(line)
+			if len(lineRunes) < maxWidth {
+				// Pad with spaces on the right
+				lines[i] = line + strings.Repeat(" ", maxWidth-len(lineRunes))
+			}
+		}
+		// Add subtitle padded to same width
+		subtitle := "       TERMINAL SCREENSAVER INSTALLER"
+		subtitleRunes := []rune(subtitle)
+		if len(subtitleRunes) < maxWidth {
+			subtitle = subtitle + strings.Repeat(" ", maxWidth-len(subtitleRunes))
+		}
+		lines = append(lines, subtitle)
 		return lines
 	}
 
-	// Fallback to embedded ASCII art
+	// Fallback to embedded ASCII art - all lines same width
 	return []string{
-		"▄▀▀▀▀ █   █ ▄▀▀▀▀ ▄▀▀▀▀          ▄▀ █   █ ",
-		" ▀▀▀▄ ▀▀▀▀█  ▀▀▀▄ █     ▀▀▀▀▀  ▄▀   █ █ █ ",
-		"▀▀▀▀  ▀▀▀▀▀ ▀▀▀▀   ▀▀▀▀       ▀      ▀ ▀ ",
-		"       TERMINAL SCREENSAVER INSTALLER",
+		"▄▀▀▀▀ █   █ ▄▀▀▀▀ ▄▀▀▀▀          ▄▀ █   █       ",
+		" ▀▀▀▄ ▀▀▀▀█  ▀▀▀▄ █     ▀▀▀▀▀  ▄▀   █ █ █       ",
+		"▀▀▀▀  ▀▀▀▀▀ ▀▀▀▀   ▀▀▀▀       ▀      ▀ ▀        ",
+		"       TERMINAL SCREENSAVER INSTALLER            ",
 	}
 }
 

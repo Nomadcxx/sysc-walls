@@ -59,11 +59,19 @@ func (c *Config) LoadFromFile(configPath string) error {
 	// Parse the config file
 	// Simple INI-style format
 	scanner := bufio.NewScanner(file)
+	currentSection := ""
+
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
 		// Skip comments and empty lines
 		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Check for section header [section]
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			currentSection = strings.Trim(line, "[]")
 			continue
 		}
 
@@ -75,6 +83,11 @@ func (c *Config) LoadFromFile(configPath string) error {
 
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
+
+		// Prepend section to key if we're in a section
+		if currentSection != "" {
+			key = currentSection + "." + key
+		}
 
 		c.parseConfigLine(key, value)
 	}
@@ -125,20 +138,32 @@ func parseDuration(value string) (time.Duration, error) {
 	// Simple parser for common duration formats
 	if strings.HasSuffix(value, "s") {
 		if seconds, err := strconv.Atoi(strings.TrimSuffix(value, "s")); err == nil {
+			if seconds < 0 {
+				return 0, fmt.Errorf("duration cannot be negative: %s", value)
+			}
 			return time.Duration(seconds) * time.Second, nil
 		}
 	} else if strings.HasSuffix(value, "m") {
 		if minutes, err := strconv.Atoi(strings.TrimSuffix(value, "m")); err == nil {
+			if minutes < 0 {
+				return 0, fmt.Errorf("duration cannot be negative: %s", value)
+			}
 			return time.Duration(minutes) * time.Minute, nil
 		}
 	} else if strings.HasSuffix(value, "h") {
 		if hours, err := strconv.Atoi(strings.TrimSuffix(value, "h")); err == nil {
+			if hours < 0 {
+				return 0, fmt.Errorf("duration cannot be negative: %s", value)
+			}
 			return time.Duration(hours) * time.Hour, nil
 		}
 	}
 
 	// Try parsing as a number of seconds
 	if seconds, err := strconv.Atoi(value); err == nil {
+		if seconds < 0 {
+			return 0, fmt.Errorf("duration cannot be negative: %s", value)
+		}
 		return time.Duration(seconds) * time.Second, nil
 	}
 

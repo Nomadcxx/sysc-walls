@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -565,13 +566,8 @@ func isWhitespace(b byte) bool {
 
 // parseInt parses an integer from a string
 func parseInt(s string) int {
-	result := 0
-	for _, char := range s {
-		if char >= '0' && char <= '9' {
-			result = result*10 + int(char-'0')
-		} else {
-			break
-		}
-	}
+	// Trim whitespace and use strconv for proper parsing
+	s = strings.TrimSpace(s)
+	result, _ := strconv.Atoi(s)
 	return result
 }

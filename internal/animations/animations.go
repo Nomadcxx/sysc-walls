@@ -14,31 +14,10 @@ type Animation interface {
 }
 
 // Factory function to create animations based on type
+// Now uses optimized direct library integration instead of exec.Command
 func CreateAnimation(effect string, width, height int, theme string) (Animation, error) {
-	switch effect {
-	case "matrix":
-		return NewMatrixAnimation(width, height, theme)
-	case "fire":
-		return NewFireAnimation(width, height, theme)
-	case "fireworks":
-		return NewFireworksAnimation(width, height, theme)
-	case "rain":
-		return NewRainAnimation(width, height, theme)
-	case "beams":
-		return NewBeamsAnimation(width, height, theme)
-	case "beam-text":
-		return NewBeamTextAnimation(width, height, theme)
-	case "decrypt":
-		return NewDecryptAnimation(width, height, theme)
-	case "pour":
-		return NewPourAnimation(width, height, theme)
-	case "aquarium":
-		return NewAquariumAnimation(width, height, theme)
-	case "print":
-		return NewPrintAnimation(width, height, theme)
-	default:
-		return nil, fmt.Errorf("unknown animation effect: %s", effect)
-	}
+	// Use optimized implementation that directly calls sysc-Go library
+	return CreateOptimizedAnimation(effect, width, height, theme)
 }
 
 // Matrix animation using the sysc-Go library

@@ -197,12 +197,7 @@ func (m model) View() string {
 	var content strings.Builder
 
 	// ASCII Header - sysc-walls themed ASCII art
-	headerLines := []string{
-		"▄▀▀▀▀ █   █ ▄▀▀▀▀ ▄▀▀▀▀          ▄▀ █   █ ▄▀▀▀▀ ▄▀▀▀▀      ",
-		" ▀▀▀▄ ▀▀▀▀█  ▀▀▀▄ █     ▀▀▀▀▀  ▄▀   █ █ █  ▀▀▀▄ █     ▀▀▀▀▀ ",
-		"▀▀▀▀  ▀▀▀▀▀ ▀▀▀▀   ▀▀▀▀       ▀      ▀ ▀ ▀▀▀▀  ▀▀▀▀   ▀▀▀▀▀  ",
-		"            TERMINAL SCREENSAVER INSTALLER           ",
-	}
+	headerLines := loadASCIIHeader()
 
 	for _, line := range headerLines {
 		content.WriteString(headerStyle.Render(line))
@@ -539,6 +534,26 @@ func getProjectRoot() string {
 	}
 
 	return "."
+}
+
+// loadASCIIHeader loads ASCII art from file or returns default
+func loadASCIIHeader() []string {
+	// Try to load from ascii.txt
+	data, err := os.ReadFile("ascii.txt")
+	if err == nil {
+		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+		// Add subtitle
+		lines = append(lines, "           TERMINAL SCREENSAVER INSTALLER")
+		return lines
+	}
+
+	// Fallback to embedded ASCII art
+	return []string{
+		"▄▀▀▀▀ █   █ ▄▀▀▀▀ ▄▀▀▀▀          ▄▀ █   █ ▄▀▀▀▀ ▄▀▀▀▀      ",
+		" ▀▀▀▄ ▀▀▀▀█  ▀▀▀▄ █     ▀▀▀▀▀  ▄▀   █ █ █  ▀▀▀▄ █     ▀▀▀▀▀ ",
+		"▀▀▀▀  ▀▀▀▀▀ ▀▀▀▀   ▀▀▀▀       ▀      ▀ ▀ ▀▀▀▀  ▀▀▀▀   ▀▀▀▀▀  ",
+		"           TERMINAL SCREENSAVER INSTALLER",
+	}
 }
 
 func main() {

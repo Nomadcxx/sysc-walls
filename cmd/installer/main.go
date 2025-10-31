@@ -542,17 +542,17 @@ func loadASCIIHeader() []string {
 	data, err := os.ReadFile("ascii.txt")
 	if err == nil {
 		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-		// Add subtitle
-		lines = append(lines, "           TERMINAL SCREENSAVER INSTALLER")
+		// Add subtitle aligned with ASCII
+		lines = append(lines, "       TERMINAL SCREENSAVER INSTALLER")
 		return lines
 	}
 
 	// Fallback to embedded ASCII art
 	return []string{
-		"▄▀▀▀▀ █   █ ▄▀▀▀▀ ▄▀▀▀▀          ▄▀ █   █ ▄▀▀▀▀ ▄▀▀▀▀      ",
-		" ▀▀▀▄ ▀▀▀▀█  ▀▀▀▄ █     ▀▀▀▀▀  ▄▀   █ █ █  ▀▀▀▄ █     ▀▀▀▀▀ ",
-		"▀▀▀▀  ▀▀▀▀▀ ▀▀▀▀   ▀▀▀▀       ▀      ▀ ▀ ▀▀▀▀  ▀▀▀▀   ▀▀▀▀▀  ",
-		"           TERMINAL SCREENSAVER INSTALLER",
+		"▄▀▀▀▀ █   █ ▄▀▀▀▀ ▄▀▀▀▀          ▄▀ █   █ ",
+		" ▀▀▀▄ ▀▀▀▀█  ▀▀▀▄ █     ▀▀▀▀▀  ▄▀   █ █ █ ",
+		"▀▀▀▀  ▀▀▀▀▀ ▀▀▀▀   ▀▀▀▀       ▀      ▀ ▀ ",
+		"       TERMINAL SCREENSAVER INSTALLER",
 	}
 }
 

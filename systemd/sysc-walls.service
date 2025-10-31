@@ -1,12 +1,24 @@
 [Unit]
-Description=sysc-walls idle daemon
+Description=sysc-walls idle daemon and screensaver
 After=graphical.target
+Documentation=https://github.com/Nomadcxx/sysc-walls
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/sysc-walls-daemon -start
-Restart=always
-RestartSec=1
+ExecStart=/usr/local/bin/sysc-walls-daemon -start -daemon
+ExecStop=/usr/local/bin/sysc-walls-daemon -stop
+PIDFile=/var/run/sysc-walls-daemon.pid
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=10
+TimeoutStopSec=10
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/run /var/log
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical.target

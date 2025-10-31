@@ -9,8 +9,11 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 
+	evdev "github.com/gvalkov/golang-evdev"
 	"github.com/Nomadcxx/sysc-walls/internal/config"
 )
 
@@ -291,69 +294,224 @@ func (d *IdleDetector) startX11Monitor(ctx context.Context) {
 
 // startInputDeviceMonitor monitors input devices for immediate activity detection
 func (d *IdleDetector) startInputDeviceMonitor(ctx context.Context) {
-	// Simple file stat monitoring of input devices as a proxy for activity
-	// This is a basic approach that works on many systems
-
-	// Check common input device paths
-	devicePaths := []string{
-		"/dev/input/event0",
-		"/dev/input/event1",
-		"/dev/input/event2",
-		"/dev/input/mouse0",
-		"/dev/input/mice",
+	// Discover all available input devices
+	devices, err := discoverInputDevices()
+	if err != nil {
+		log.Printf("Failed to discover input devices: %v, falling back to polling", err)
+		d.startInputDevicePolling(ctx)
+		return
 	}
 
-	// Get initial stat times
-	lastModTimes := make(map[string]time.Time)
-	for _, path := range devicePaths {
-		if info, err := os.Stat(path); err == nil {
-			lastModTimes[path] = info.ModTime()
+	if len(devices) == 0 {
+		log.Println("No input devices found, falling back to polling")
+		d.startInputDevicePolling(ctx)
+		return
+	}
+
+	if d.config.IsDebug() {
+		log.Printf("Monitoring %d input devices for activity", len(devices))
+	}
+
+	// Create a channel for activity signals from all devices
+	activityChan := make(chan struct{}, 10)
+
+	// Start monitoring each device in a separate goroutine
+	for _, devicePath := range devices {
+		go d.monitorDevice(ctx, devicePath, activityChan)
+	}
+
+	// Listen for activity signals
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-activityChan:
+			// Activity detected on any device
+			d.MarkActive()
+
+			// Fire resume event immediately
+			select {
+			case d.resumeChan <- struct{}{}:
+				if d.config.IsDebug() {
+					log.Println("Input device activity detected")
+				}
+			default:
+				// Channel already has a value, don't block
+			}
+
+			// Clear any pending idle event
+			select {
+			case <-d.idleChan:
+			default:
+			}
+		}
+	}
+}
+
+// discoverInputDevices finds all available input event devices
+func discoverInputDevices() ([]string, error) {
+	devices := []string{}
+
+	// List all event devices in /dev/input/
+	files, err := filepath.Glob("/dev/input/event*")
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter to only keyboard and mouse devices
+	for _, file := range files {
+		device, err := evdev.Open(file)
+		if err != nil {
+			continue
+		}
+
+		// Check if device has key events (keyboard) or mouse events
+		caps := device.Capabilities
+		hasKeys := false
+		hasPointer := false
+
+		// Iterate through capabilities to check event types
+		for capType := range caps {
+			if capType.Type == evdev.EV_KEY {
+				hasKeys = true
+			}
+			if capType.Type == evdev.EV_REL || capType.Type == evdev.EV_ABS {
+				hasPointer = true
+			}
+		}
+
+		device.File.Close()
+
+		// Include devices that are keyboards or pointing devices
+		if hasKeys || hasPointer {
+			devices = append(devices, file)
 		}
 	}
 
-	ticker := time.NewTicker(100 * time.Millisecond) // Check frequently for activity
+	return devices, nil
+}
+
+// monitorDevice monitors a single input device for events
+func (d *IdleDetector) monitorDevice(ctx context.Context, devicePath string, activityChan chan<- struct{}) {
+	device, err := evdev.Open(devicePath)
+	if err != nil {
+		if d.config.IsDebug() {
+			log.Printf("Failed to open device %s: %v", devicePath, err)
+		}
+		return
+	}
+	defer device.File.Close()
+
+	if d.config.IsDebug() {
+		log.Printf("Monitoring device: %s (%s)", devicePath, device.Name)
+	}
+
+	// Use non-blocking reads with select
+	eventChan := make(chan *evdev.InputEvent, 10)
+	errChan := make(chan error, 1)
+
+	// Read events in a goroutine
+	go func() {
+		for {
+			events, err := device.Read()
+			if err != nil {
+				errChan <- err
+				return
+			}
+			for i := range events {
+				select {
+				case eventChan <- &events[i]:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+
+	// Monitor for events or context cancellation
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err := <-errChan:
+			if d.config.IsDebug() {
+				log.Printf("Device %s read error: %v", devicePath, err)
+			}
+			return
+		case event := <-eventChan:
+			// Only care about key presses, mouse movements, button clicks
+			if event.Type == evdev.EV_KEY || event.Type == evdev.EV_REL || event.Type == evdev.EV_ABS {
+				select {
+				case activityChan <- struct{}{}:
+				default:
+					// Don't block if channel is full
+				}
+			}
+		}
+	}
+}
+
+// startInputDevicePolling is a fallback method using device file polling
+func (d *IdleDetector) startInputDevicePolling(ctx context.Context) {
+	// Try to use X11 idle detection if available
+	if hasXprintidle() {
+		go d.monitorX11Idle(ctx)
+		return
+	}
+
+	// Last resort: just rely on timer-based idle detection
+	log.Println("Warning: No reliable activity detection method available")
+}
+
+// hasXprintidle checks if xprintidle command is available
+func hasXprintidle() bool {
+	_, err := exec.LookPath("xprintidle")
+	return err == nil
+}
+
+// monitorX11Idle monitors X11 idle time using xprintidle
+func (d *IdleDetector) monitorX11Idle(ctx context.Context) {
+	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
+
+	var lastIdleTime int64
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			activityDetected := false
-
-			// Check if any input device files have been modified
-			for _, path := range devicePaths {
-				if info, err := os.Stat(path); err == nil {
-					if modTime, exists := lastModTimes[path]; exists {
-						if info.ModTime().After(modTime) {
-							// Device was accessed, activity detected
-							activityDetected = true
-							lastModTimes[path] = info.ModTime()
-							break
-						}
-					} else {
-						lastModTimes[path] = info.ModTime()
-					}
-				}
+			cmd := exec.Command("xprintidle")
+			output, err := cmd.Output()
+			if err != nil {
+				continue
 			}
 
-			if activityDetected {
-				// Fire resume event immediately
+			var idleTimeMs int64
+			_, err = fmt.Sscanf(strings.TrimSpace(string(output)), "%d", &idleTimeMs)
+			if err != nil {
+				continue
+			}
+
+			// If idle time decreased, activity was detected
+			if lastIdleTime > 0 && idleTimeMs < lastIdleTime {
+				d.MarkActive()
+
 				select {
 				case d.resumeChan <- struct{}{}:
 					if d.config.IsDebug() {
-						log.Println("Input device activity detected")
+						log.Println("X11 activity detected")
 					}
 				default:
-					// Channel already has a value, don't block
 				}
 
-				// Clear any pending idle event
 				select {
 				case <-d.idleChan:
 				default:
 				}
 			}
+
+			lastIdleTime = idleTimeMs
 		}
 	}
 }

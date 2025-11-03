@@ -338,11 +338,11 @@ func (m model) renderComplete() string {
 			b.WriteString("\n\n")
 			b.WriteString(lipgloss.NewStyle().Foreground(FgSecondary).Render("sysc-walls is now installed at /usr/local/bin"))
 			b.WriteString("\n\n")
-			b.WriteString(lipgloss.NewStyle().Foreground(FgSecondary).Render("Try it out:"))
+			b.WriteString(lipgloss.NewStyle().Foreground(FgSecondary).Render("To start the service:"))
 			b.WriteString("\n")
-			b.WriteString(lipgloss.NewStyle().Foreground(Accent).Render("  systemctl enable sysc-walls.service"))
+			b.WriteString(lipgloss.NewStyle().Foreground(Accent).Render("  systemctl --user enable sysc-walls.service"))
 			b.WriteString("\n")
-			b.WriteString(lipgloss.NewStyle().Foreground(Accent).Render("  systemctl start sysc-walls.service"))
+			b.WriteString(lipgloss.NewStyle().Foreground(Accent).Render("  systemctl --user start sysc-walls.service"))
 		}
 	}
 

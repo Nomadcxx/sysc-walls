@@ -1,0 +1,15 @@
+[Unit]
+Description=sysc-walls idle daemon and screensaver (user service)
+After=graphical-session.target
+Documentation=https://github.com/Nomadcxx/sysc-walls
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/sysc-walls-daemon -start -debug
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=10
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target

@@ -7,21 +7,55 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
+	"unsafe"
 )
+
+// winsize is the struct returned by the TIOCGWINSZ ioctl
+type winsize struct {
+	Row    uint16
+	Col    uint16
+	Xpixel uint16
+	Ypixel uint16
+}
 
 // GetTerminalSize returns the current terminal dimensions
 func GetTerminalSize() (int, int, error) {
-	// For fullscreen usage, we need to detect actual terminal size
-	// Try multiple methods to get real dimensions
+	// Method 1: Use ioctl TIOCGWINSZ to get terminal size directly from TTY
+	// This is the most reliable method as it queries the actual terminal
+	ws := &winsize{}
+	retCode, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
+		uintptr(syscall.Stdout),
+		uintptr(syscall.TIOCGWINSZ),
+		uintptr(unsafe.Pointer(ws)))
 
-	// Method 1: Use tput for terminal size (most reliable)
+	if int(retCode) != -1 {
+		return int(ws.Col), int(ws.Row), nil
+	}
+
+	// Method 2: Try opening /dev/tty directly if stdout isn't a TTY
+	ttyFile, err := os.Open("/dev/tty")
+	if err == nil {
+		defer ttyFile.Close()
+		
+		retCode, _, errno = syscall.Syscall(syscall.SYS_IOCTL,
+			ttyFile.Fd(),
+			uintptr(syscall.TIOCGWINSZ),
+			uintptr(unsafe.Pointer(ws)))
+
+		if int(retCode) != -1 {
+			return int(ws.Col), int(ws.Row), nil
+		}
+	}
+
+	// Method 3: Use tput for terminal size
 	if cols, lines, err := getTerminalSizeTput(); err == nil {
 		return cols, lines, nil
 	}
 
-	// Method 2: Use environment variables (common for fullscreen terminals)
-	cols := 200 // Large default for fullscreen
-	lines := 60 // Large default for fullscreen
+	// Method 4: Use environment variables (fallback)
+	cols := 80
+	lines := 24
 
 	if colsEnv := os.Getenv("COLUMNS"); colsEnv != "" {
 		if colVal, err := strconv.Atoi(colsEnv); err == nil && colVal > 0 {
@@ -35,7 +69,7 @@ func GetTerminalSize() (int, int, error) {
 		}
 	}
 
-	return cols, lines, nil
+	return cols, lines, fmt.Errorf("could not determine terminal size, using fallback: %dx%d (errno: %v)", cols, lines, errno)
 }
 
 // getTerminalSizeTput gets terminal size using tput

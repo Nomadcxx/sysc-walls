@@ -97,8 +97,12 @@ func (d *Daemon) Daemonize() error {
 
 // createPidFile creates a PID file with the current process ID
 func (d *Daemon) createPidFile() error {
-	// Determine PID file location
-	d.pidFile = filepath.Join("/var/run", fmt.Sprintf("%s.pid", d.name))
+	// Determine PID file location - use user runtime directory
+	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
+	if runtimeDir == "" {
+		runtimeDir = fmt.Sprintf("/run/user/%d", os.Getuid())
+	}
+	d.pidFile = filepath.Join(runtimeDir, fmt.Sprintf("%s.pid", d.name))
 
 	// Try to create the PID file
 	file, err := os.OpenFile(d.pidFile, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644)

@@ -8,6 +8,8 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -48,7 +50,7 @@ func main() {
 	// Parse command line flags
 	var (
 		runAsDaemon = flag.Bool("daemon", false, "Run as daemon (no output)")
-		configPath  = flag.String("config", "~/.config/sysc-walls/daemon.conf", "Path to config file")
+		configPath  = flag.String("config", "", "Path to config file")
 		start       = flag.Bool("start", false, "Start the daemon")
 		stop        = flag.Bool("stop", false, "Stop the daemon")
 		test        = flag.Bool("test", false, "Test mode - activate screensaver immediately")
@@ -56,9 +58,28 @@ func main() {
 	)
 	flag.Parse()
 
+	// Expand config path with default
+	expandedConfigPath := *configPath
+	if expandedConfigPath == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			log.Fatalf("Failed to get home directory: %v", err)
+		}
+		expandedConfigPath = filepath.Join(homeDir, ".config", "sysc-walls", "daemon.conf")
+	} else {
+		expandedConfigPath = os.ExpandEnv(expandedConfigPath)
+		if strings.HasPrefix(expandedConfigPath, "~/") {
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				log.Fatalf("Failed to get home directory: %v", err)
+			}
+			expandedConfigPath = filepath.Join(homeDir, expandedConfigPath[2:])
+		}
+	}
+
 	// Initialize config manager
 	cfg := config.NewConfig()
-	if err := cfg.LoadFromFile(*configPath); err != nil {
+	if err := cfg.LoadFromFile(expandedConfigPath); err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
@@ -279,8 +300,19 @@ func (d *Daemon) Shutdown() {
 
 // setupLogging sets up logging to a file for daemonized processes
 func setupLogging() {
-	// Open log file
-	f, err := os.OpenFile("/var/log/sysc-walls-daemon.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	// Use user's home directory for log file
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("Failed to get home directory: %v", err)
+	}
+
+	logDir := filepath.Join(homeDir, ".local", "share", "sysc-walls")
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		log.Fatalf("Failed to create log directory: %v", err)
+	}
+
+	logFile := filepath.Join(logDir, "daemon.log")
+	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("Failed to open log file: %v", err)
 	}

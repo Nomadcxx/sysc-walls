@@ -25,17 +25,29 @@ func main() {
 	)
 	flag.Parse()
 
-	// If fullscreen is requested, try to resize terminal to typical dimensions
+	// If fullscreen is requested, give terminal time to resize
 	if *fullScreen {
-		// This is a no-op in many terminals, but worth trying
-		utils.EnterFullscreen()
+		// Give terminal time to fully enter fullscreen mode
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	// Get terminal dimensions AFTER possibly entering fullscreen
 	width, height, err := utils.GetTerminalSize()
-	if err != nil {
+	if err != nil && *debug {
 		fmt.Fprintf(os.Stderr, "Error getting terminal size: %v\n", err)
-		os.Exit(1)
+	}
+	
+	// Retry getting size a few times if it looks wrong
+	for i := 0; i < 5 && (width < 100 || height < 40); i++ {
+		time.Sleep(50 * time.Millisecond)
+		width, height, err = utils.GetTerminalSize()
+		if *debug {
+			fmt.Fprintf(os.Stderr, "Retry %d: size=%dx%d\n", i+1, width, height)
+		}
+	}
+	
+	if *debug {
+		fmt.Fprintf(os.Stderr, "Final terminal size: %dx%d\n", width, height)
 	}
 
 	// Setup terminal

@@ -378,8 +378,10 @@ func (c *Config) GetScreensaverCommand() string {
 	theme := c.GetAnimationTheme()
 
 	// Build the command to launch kitty with the display binary
+	// Use unique class name to identify screensaver window
 	parts := []string{terminal}
 	parts = append(parts, args...)
+	parts = append(parts, "--class", "sysc-walls-screensaver")
 	parts = append(parts, "/usr/local/bin/sysc-walls-display", "--effect", effect, "--theme", theme, "--fullscreen")
 
 	return strings.Join(parts, " ")

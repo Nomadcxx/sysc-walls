@@ -107,6 +107,12 @@ func (w *WaylandIdleDetector) initialize() error {
 		return fmt.Errorf("failed to register idle timeout: %w", err)
 	}
 
+	// Perform one more roundtrip to ensure notification is set up
+	if err := w.displayRoundtrip(); err != nil {
+		return fmt.Errorf("failed final roundtrip: %w", err)
+	}
+
+	log.Println("Wayland idle detector initialized successfully")
 	return nil
 }
 

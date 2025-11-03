@@ -313,8 +313,12 @@ func (m model) renderComplete() string {
 	var b strings.Builder
 
 	if len(m.errors) > 0 {
-		// Installation failed
-		b.WriteString(lipgloss.NewStyle().Foreground(ErrorColor).Bold(true).Render("Installation failed"))
+		// Installation/Uninstallation failed
+		failMsg := "Installation failed"
+		if m.uninstallMode {
+			failMsg = "Uninstallation failed"
+		}
+		b.WriteString(lipgloss.NewStyle().Foreground(ErrorColor).Bold(true).Render(failMsg))
 		b.WriteString("\n\n")
 		b.WriteString(lipgloss.NewStyle().Foreground(FgSecondary).Render("Errors encountered:"))
 		b.WriteString("\n")
@@ -451,10 +455,10 @@ func installSystemdService(m *model) error {
 	projectRoot := getProjectRoot()
 	srcPath := filepath.Join(projectRoot, "systemd", "sysc-walls-user.service")
 	
-	// Get user's home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get home directory: %v", err)
+	// Get the actual user's home directory (not root when using sudo)
+	homeDir := os.Getenv("HOME")
+	if sudoUser := os.Getenv("SUDO_USER"); sudoUser != "" {
+		homeDir = "/home/" + sudoUser
 	}
 	
 	// Create user systemd directory
@@ -504,9 +508,10 @@ func removeBinaries(m *model) error {
 }
 
 func removeSystemdService(m *model) error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get home directory: %v", err)
+	// Get the actual user's home directory (not root when using sudo)
+	homeDir := os.Getenv("HOME")
+	if sudoUser := os.Getenv("SUDO_USER"); sudoUser != "" {
+		homeDir = "/home/" + sudoUser
 	}
 	
 	// Stop and disable the user service first (ignore errors)
@@ -520,9 +525,10 @@ func removeSystemdService(m *model) error {
 
 	// Remove the user service file
 	servicePath := filepath.Join(homeDir, ".config", "systemd", "user", "sysc-walls.service")
-	err = os.Remove(servicePath)
+	err := os.Remove(servicePath)
 	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove systemd service: %v", err)
+		// Service file doesn't exist or we can't remove it - not critical, just log it
+		fmt.Printf("Note: Could not remove service file at %s: %v\n", servicePath, err)
 	}
 
 	// Reload user systemd (ignore errors - might not be running)

@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="assets/logo.png" alt="sysc-walls" width="500">
+  <img src="assets/logo.png" alt="sysc-walls" width="600">
   
-  **Terminal screensaver with slick animations and smart idle detection**
+  **Terminal screensaver with animations and idle detection**
   
   [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
   [![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go)](go.mod)
@@ -9,9 +9,7 @@
 
 ---
 
-Tired of boring black screens? sysc-walls brings your terminal to life when you step away. It watches for idle activity on Wayland (and X11), then kicks off gorgeous animations powered by [sysc-Go](https://github.com/Nomadcxx/sysc-Go). Matrix rain, fire effects, retro beams—you name it.
-
-Everything runs as a proper systemd service, so it just works. No babysitting required.
+A screensaver for your terminal. Watches for idle activity on Wayland (or X11), then displays animations from [sysc-Go](https://github.com/Nomadcxx/sysc-Go) when you step away. Runs as a systemd service so it starts with your session.
 
 ## Getting Started
 

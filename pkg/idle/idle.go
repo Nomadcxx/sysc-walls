@@ -2,10 +2,8 @@
 package idle
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -54,49 +52,10 @@ func (d *IdleDetector) Events() *Events {
 
 // Start starts the idle detector
 func (d *IdleDetector) Start(ctx context.Context) error {
-	// Create ticker for regular idle checks
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
 	// Initialize last active time
 	d.lastActive = time.Now()
 
 	log.Printf("Starting idle detector with timeout: %v", d.idleTimeout)
-
-	// Start monitoring in a goroutine
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				now := time.Now()
-
-				// Calculate idle time
-				idleTime := now.Sub(d.lastActive)
-
-				if d.config.IsDebug() {
-					log.Printf("Idle time: %v", idleTime)
-				}
-
-				// Check if we've exceeded the idle threshold
-				if idleTime >= d.idleTimeout {
-					// Fire idle event if not already fired
-					select {
-					case d.idleChan <- struct{}{}:
-					default:
-						// Channel already has a value, don't block
-					}
-				} else {
-					// We're active, reset the idle event channel
-					select {
-					case <-d.idleChan:
-					default:
-					}
-				}
-			}
-		}
-	}()
 
 	// Detect display server and start appropriate monitor
 	displayServer := detectDisplayServer()
@@ -104,8 +63,8 @@ func (d *IdleDetector) Start(ctx context.Context) error {
 	// Start monitoring for display server specific idle detection
 	switch displayServer {
 	case "wayland":
-		// Try to detect Wayland compositor and start appropriate monitor
-		d.detectAndStartWaylandMonitor(ctx)
+		// Use native Wayland idle detection
+		return d.startWaylandIdleDetection(ctx)
 	case "x11":
 		// Start X11 idle detection using xprintidle
 		d.startX11Monitor(ctx)
@@ -127,104 +86,64 @@ func detectDisplayServer() string {
 	return "none"
 }
 
-// detectAndStartWaylandMonitor detects the Wayland compositor and starts the appropriate monitor
-func (d *IdleDetector) detectAndStartWaylandMonitor(ctx context.Context) {
-	// Get the Wayland compositor
-	waylandCompositor := os.Getenv("WAYLAND_DISPLAY")
+// startWaylandIdleDetection starts native Wayland idle detection using ext-idle-notify-v1
+func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
+	log.Println("Starting Wayland idle detection using ext-idle-notify-v1")
 
-	// Hyprland
-	if os.Getenv("HYPRLAND_INSTANCE_SIGNATURE") != "" ||
-		(waylandCompositor != "" && (waylandCompositor == "wayland-1" || waylandCompositor == "wayland-0")) {
-		// Try to use hypridle
-		if _, err := os.Stat("/usr/bin/hypridle"); err == nil {
-			d.startHypridleMonitor(ctx)
-			return
+	// Create Wayland idle detector
+	onIdle := func() {
+		// Fire idle event
+		select {
+		case d.idleChan <- struct{}{}:
+			if d.config.IsDebug() {
+				log.Println("Idle event fired")
+			}
+		default:
+			// Channel already has a value, don't block
 		}
 	}
 
-	// GNOME/KDE/Sway and others - use the generic idle-inhibit protocol
-	if _, err := os.Stat("/usr/bin/idle-inhibit"); err == nil {
-		d.startGenericWaylandMonitor(ctx)
-		return
+	onResume := func() {
+		d.lastActive = time.Now()
+		
+		// Fire resume event
+		select {
+		case d.resumeChan <- struct{}{}:
+			if d.config.IsDebug() {
+				log.Println("Resume event fired")
+			}
+		default:
+			// Channel already has a value, don't block
+		}
+
+		// Clear any pending idle event
+		select {
+		case <-d.idleChan:
+		default:
+		}
 	}
 
-	log.Println("No suitable Wayland idle detection tool found, falling back to generic monitoring")
-}
-
-// startHypridleMonitor starts hypridle with custom settings
-func (d *IdleDetector) startHypridleMonitor(ctx context.Context) {
-	// Build the hypridle command
-	cmdStr := fmt.Sprintf("hypridle general { on-timeout = 'echo IDLE'; on-resume = 'echo RESUME'; } listener { timeout = %d; }", int(d.idleTimeout.Seconds()))
-
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("echo '%s' | hypridle", cmdStr))
-
-	// Create pipes to capture stdout and stderr
-	stdout, err := cmd.StdoutPipe()
+	waylandDetector, err := NewWaylandIdleDetector(d.idleTimeout, onIdle, onResume)
 	if err != nil {
-		log.Printf("Failed to create stdout pipe: %v", err)
-		return
+		log.Printf("Failed to create Wayland idle detector: %v", err)
+		log.Println("Falling back to X11 detection if available")
+		d.startX11Monitor(ctx)
+		return err
 	}
 
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		log.Printf("Failed to create stderr pipe: %v", err)
-		return
+	// Start the Wayland detector
+	if err := waylandDetector.Start(); err != nil {
+		log.Printf("Failed to start Wayland idle detector: %v", err)
+		return err
 	}
 
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		log.Printf("Failed to start hypridle monitor: %v", err)
-		return
-	}
-
-	// Monitor the output in goroutines
-	go d.readCommandOutput(stdout, "stdout")
-	go d.readCommandOutput(stderr, "stderr")
-
-	// Create a context for the goroutines
-	goroutineCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	// Set up a goroutine to kill the command when context is cancelled
+	// Monitor context cancellation and stop the detector
 	go func() {
-		<-goroutineCtx.Done()
-		cmd.Process.Kill()
+		<-ctx.Done()
+		waylandDetector.Stop()
 	}()
-}
 
-// readCommandOutput reads output from a pipe (stdout or stderr)
-func (d *IdleDetector) readCommandOutput(reader io.ReadCloser, streamType string) {
-	defer reader.Close()
-
-	// Create a scanner to read line by line
-	scanner := bufio.NewScanner(reader)
-
-	for scanner.Scan() {
-		line := trimWhitespace(scanner.Text())
-
-		if streamType == "stdout" {
-			if line == "IDLE" {
-				log.Println("Wayland idle detected (hypridle)")
-				d.idleChan <- struct{}{}
-			} else if line == "RESUME" {
-				log.Println("Wayland resume detected (hypridle)")
-				d.lastActive = time.Now()
-				d.resumeChan <- struct{}{}
-			}
-		} else {
-			// stderr output
-			if len(line) > 0 {
-				log.Printf("hypridle stderr: %s", line)
-			}
-		}
-	}
-}
-
-// startGenericWaylandMonitor starts a generic Wayland idle detection using idle-inhibit
-func (d *IdleDetector) startGenericWaylandMonitor(ctx context.Context) {
-	// This is a placeholder for a generic Wayland idle detection
-	// In a real implementation, we would use a tool like idle-inhibit
-	log.Println("Generic Wayland idle detection not yet implemented")
+	return nil
 }
 
 // startX11Monitor starts X11 idle detection using xprintidle

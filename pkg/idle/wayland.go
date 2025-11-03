@@ -90,9 +90,14 @@ func (w *WaylandIdleDetector) initialize() error {
 		return fmt.Errorf("no seat found")
 	}
 
-	// Bind to the idle notifier
+	// Bind to the idle notifier (use version 1 for compatibility)
+	bindVersion := idleNotifierVersion
+	if bindVersion > 1 {
+		bindVersion = 1
+		log.Printf("Compositor supports ext_idle_notifier_v1 version %d, using version 1 for compatibility", idleNotifierVersion)
+	}
 	w.idleNotifier = ext_idle_notify.NewIdleNotifier(w.display.Context())
-	if err := w.registry.Bind(idleNotifierName, "ext_idle_notifier_v1", idleNotifierVersion, w.idleNotifier); err != nil {
+	if err := w.registry.Bind(idleNotifierName, "ext_idle_notifier_v1", bindVersion, w.idleNotifier); err != nil {
 		return fmt.Errorf("failed to bind idle notifier: %w", err)
 	}
 
@@ -105,11 +110,6 @@ func (w *WaylandIdleDetector) initialize() error {
 	// Register idle timeout
 	if err := w.registerIdleTimeout(); err != nil {
 		return fmt.Errorf("failed to register idle timeout: %w", err)
-	}
-
-	// Perform one more roundtrip to ensure notification is set up
-	if err := w.displayRoundtrip(); err != nil {
-		return fmt.Errorf("failed final roundtrip: %w", err)
 	}
 
 	log.Println("Wayland idle detector initialized successfully")

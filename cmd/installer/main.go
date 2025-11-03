@@ -509,7 +509,7 @@ func removeSystemdService(m *model) error {
 		return fmt.Errorf("failed to get home directory: %v", err)
 	}
 	
-	// Stop and disable the user service first
+	// Stop and disable the user service first (ignore errors)
 	cmd := exec.Command("systemctl", "--user", "stop", "sysc-walls.service")
 	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", os.Getuid()))
 	cmd.Run()
@@ -525,10 +525,12 @@ func removeSystemdService(m *model) error {
 		return fmt.Errorf("failed to remove systemd service: %v", err)
 	}
 
-	// Reload user systemd
+	// Reload user systemd (ignore errors - might not be running)
 	cmd = exec.Command("systemctl", "--user", "daemon-reload")
 	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", os.Getuid()))
-	return cmd.Run()
+	cmd.Run()
+	
+	return nil
 }
 
 func getProjectRoot() string {

@@ -27,7 +27,7 @@ systemctl --user enable sysc-walls.service
 systemctl --user start sysc-walls.service
 ```
 
-Now go idle for 5 minutes and watch the magic happen.
+The default idle timeout is 5 minutes.
 
 ## Configuration
 
@@ -47,20 +47,20 @@ cycle = false         # Rotate through effects
 debug = false         # Enable logging
 ```
 
-Want to test without waiting? Run this:
+To test immediately without waiting:
 ```bash
 /usr/local/bin/sysc-walls-daemon -test
 ```
 
 ## What's Inside
 
-- **Native Wayland idle detection** via CGO bindings to libwayland-client (works with Niri, Sway, Hyprland, etc.)
+- **native Wayland idle detection** via CGO bindings to libwayland-client (works with Niri, Sway, Hyprland, etc.)
 - **X11 support** using xprintidle
-- **Systemd integration** so it starts with your session
-- **Multiple animations**: matrix, fire, fireworks, rain, beams, decrypt, pour, aquarium, and more
-- **Color themes**: dracula, gruvbox, nord, tokyo-night, catppuccin, material, solarized
-- **Fullscreen terminal rendering** that actually uses your entire screen
-- **Resource efficient** - sleeps when you're active
+- **systemd integration** so it starts with your session
+- **multiple animations**: matrix, fire, fireworks, rain, beams, decrypt, pour, aquarium, and more
+- **color themes**: dracula, gruvbox, nord, tokyo-night, catppuccin, material, solarized
+- **fullscreen terminal rendering** that actually uses your entire screen
+- **resource efficient** - sleeps when you're active
 
 ## How It Works
 

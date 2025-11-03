@@ -446,8 +446,21 @@ func installBinaries(m *model) error {
 
 func installSystemdService(m *model) error {
 	projectRoot := getProjectRoot()
-	srcPath := filepath.Join(projectRoot, "systemd", "sysc-walls.service")
-	dstPath := "/etc/systemd/system/sysc-walls.service"
+	srcPath := filepath.Join(projectRoot, "systemd", "sysc-walls-user.service")
+	
+	// Get user's home directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %v", err)
+	}
+	
+	// Create user systemd directory
+	userSystemdDir := filepath.Join(homeDir, ".config", "systemd", "user")
+	if err := os.MkdirAll(userSystemdDir, 0755); err != nil {
+		return fmt.Errorf("failed to create user systemd directory: %v", err)
+	}
+	
+	dstPath := filepath.Join(userSystemdDir, "sysc-walls.service")
 
 	// Read the source file
 	data, err := os.ReadFile(srcPath)
@@ -461,13 +474,15 @@ func installSystemdService(m *model) error {
 		return fmt.Errorf("failed to install systemd service: %v", err)
 	}
 
-	// Reload systemd
-	cmd := exec.Command("systemctl", "daemon-reload")
+	// Reload user systemd
+	cmd := exec.Command("systemctl", "--user", "daemon-reload")
+	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", os.Getuid()))
 	return cmd.Run()
 }
 
 func enableSystemdService(m *model) error {
-	cmd := exec.Command("systemctl", "enable", "sysc-walls.service")
+	cmd := exec.Command("systemctl", "--user", "enable", "sysc-walls.service")
+	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", os.Getuid()))
 	return cmd.Run()
 }
 
@@ -486,21 +501,30 @@ func removeBinaries(m *model) error {
 }
 
 func removeSystemdService(m *model) error {
-	// Stop and disable the service first
-	cmd := exec.Command("systemctl", "stop", "sysc-walls.service")
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %v", err)
+	}
+	
+	// Stop and disable the user service first
+	cmd := exec.Command("systemctl", "--user", "stop", "sysc-walls.service")
+	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", os.Getuid()))
 	cmd.Run()
 
-	cmd = exec.Command("systemctl", "disable", "sysc-walls.service")
+	cmd = exec.Command("systemctl", "--user", "disable", "sysc-walls.service")
+	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", os.Getuid()))
 	cmd.Run()
 
-	// Remove the service file
-	err := os.Remove("/etc/systemd/system/sysc-walls.service")
+	// Remove the user service file
+	servicePath := filepath.Join(homeDir, ".config", "systemd", "user", "sysc-walls.service")
+	err = os.Remove(servicePath)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove systemd service: %v", err)
 	}
 
-	// Reload systemd
-	cmd = exec.Command("systemctl", "daemon-reload")
+	// Reload user systemd
+	cmd = exec.Command("systemctl", "--user", "daemon-reload")
+	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", os.Getuid()))
 	return cmd.Run()
 }
 

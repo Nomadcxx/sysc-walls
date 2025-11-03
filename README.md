@@ -1,103 +1,97 @@
-# sysc-walls
+<div align="center">
+  <img src="assets/logo.png" alt="sysc-walls" width="500">
+  
+  **Terminal screensaver with slick animations and smart idle detection**
+  
+  [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+  [![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go)](go.mod)
+</div>
 
-> IN DEVELOPMENT - This project is actively being developed
+---
 
-A terminal-based screensaver that combines animations from sysc-Go with intelligent idle detection. Features direct binary execution and systemd service support.
+Tired of boring black screens? sysc-walls brings your terminal to life when you step away. It watches for idle activity on Wayland (and X11), then kicks off gorgeous animations powered by [sysc-Go](https://github.com/Nomadcxx/sysc-Go). Matrix rain, fire effects, retro beams—you name it.
 
-## Quick Start
+Everything runs as a proper systemd service, so it just works. No babysitting required.
 
-### Installation (Recommended)
+## Getting Started
+
+**Clone and install:**
 ```bash
-# Download and run the installer
+git clone https://github.com/Nomadcxx/sysc-walls.git
+cd sysc-walls
 sudo ./installer
 ```
 
-### Manual Build
+The installer builds everything and sets up the systemd service. After that:
+
 ```bash
-go build -o sysc-walls-daemon ./cmd/daemon/
-go build -o sysc-walls-display ./cmd/display/
-go build -o sysc-walls-client ./cmd/client/
+systemctl --user enable sysc-walls.service
+systemctl --user start sysc-walls.service
 ```
 
-## Usage
-
-### Start the Screensaver
-```bash
-# Test screensaver immediately
-./sysc-walls-daemon -test
-
-# Start the idle daemon (5min timeout)
-sudo systemctl start sysc-walls.service
-```
-
-### Configure
-```bash
-# Set animation and theme
-sysc-walls-client set effect matrix
-sysc-walls-client set theme nord
-
-# Set idle timeout (5 minutes)
-sysc-walls-client set timeout 5m
-
-# Check current settings
-sysc-walls-client status
-```
-
-### Daemon Management
-```bash
-# Enable auto-start on boot
-sudo systemctl enable sysc-walls.service
-
-# Start/stop daemon
-sudo systemctl start sysc-walls.service
-sudo systemctl stop sysc-walls.service
-
-# Check status
-systemctl status sysc-walls.service
-```
-
-## Features
-
-- Terminal animations using sysc-Go library
-- Smart idle detection for Wayland and X11
-- Systemd service integration for auto-start
-- Direct binary execution (no terminal dependency)
-- CLI management for configuration
-- Resource efficient screensaver
-
-## Animation Effects
-
-Available animations: matrix, fire, fireworks, rain, beams, beam-text, decrypt, pour, aquarium, print
-
-Available themes: dracula, gruvbox, nord, tokyo-night, catppuccin, material, solarized, monochrome, transishardjob
+Now go idle for 5 minutes and watch the magic happen.
 
 ## Configuration
 
-Config file: ~/.config/sysc-walls/daemon.conf
+Config lives at `~/.config/sysc-walls/daemon.conf`:
 
 ```ini
 [idle]
-timeout = 5m          # Idle timeout
-min_duration = 30s    # Minimum screensaver duration
+timeout = 5m          # How long before screensaver kicks in
+min_duration = 30s    # Minimum time screensaver runs
 
 [animation]
-effect = matrix       # Animation effect
-theme = nord          # Color theme
-cycle = true          # Cycle through animations
+effect = matrix       # Which animation to show
+theme = nord          # Color scheme
+cycle = false         # Rotate through effects
 
 [daemon]
-debug = false         # Enable debug logging
+debug = false         # Enable logging
 ```
 
-## Development
+Want to test without waiting? Run this:
+```bash
+/usr/local/bin/sysc-walls-daemon -test
+```
 
-Built with Go using sysc-Go animations library:
+## What's Inside
 
-- Daemon: Idle detection and screensaver management
-- Display: Animation rendering with direct execution
-- Client: CLI configuration management
-- Systemd: Service integration
+- **Native Wayland idle detection** via CGO bindings to libwayland-client (works with Niri, Sway, Hyprland, etc.)
+- **X11 support** using xprintidle
+- **Systemd integration** so it starts with your session
+- **Multiple animations**: matrix, fire, fireworks, rain, beams, decrypt, pour, aquarium, and more
+- **Color themes**: dracula, gruvbox, nord, tokyo-night, catppuccin, material, solarized
+- **Fullscreen terminal rendering** that actually uses your entire screen
+- **Resource efficient** - sleeps when you're active
+
+## How It Works
+
+Three simple components:
+
+1. **daemon** - Watches for idle activity using Wayland protocols (or X11 as fallback), launches screensaver when you go idle
+2. **display** - Renders sysc-Go animations in fullscreen Kitty terminal
+3. **client** - CLI tool for managing settings (not required, just convenient)
+
+The daemon uses CGO bindings to native Wayland libraries, following the same approach as swayidle. This means it works reliably across different compositors without depending on archived Go libraries.
+
+## Debugging
+
+If something's wonky, check the logs:
+```bash
+journalctl --user -u sysc-walls.service -f
+```
+
+Or test idle detection directly:
+```bash
+./test-idle-detector --timeout 10
+```
+
+This will show you when idle/resume events are detected without launching the full screensaver.
 
 ## License
 
-MIT
+MIT - Do whatever you want with it.
+
+## Credits
+
+Built on top of [sysc-Go](https://github.com/Nomadcxx/sysc-Go) for animations. Inspired by classic terminal screensavers but actually functional on modern Wayland systems.

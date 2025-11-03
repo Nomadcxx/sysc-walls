@@ -421,7 +421,6 @@ func installBinaries(m *model) error {
 	components := []string{"daemon", "display", "client"}
 
 	// Stop the daemon if it's running to avoid "text file busy" error
-	fmt.Println("Stopping sysc-walls service if running...")
 	stopCmd := exec.Command("systemctl", "stop", "sysc-walls.service")
 	stopCmd.Run() // Ignore errors - service might not be running
 
@@ -503,10 +502,8 @@ func installSystemdService(m *model) error {
 		// Run as the actual user, not root
 		cmd = exec.Command("sudo", "-u", sudoUser, "systemctl", "--user", "daemon-reload")
 	}
-	if err := cmd.Run(); err != nil {
-		// Don't fail on daemon-reload errors
-		fmt.Printf("Warning: daemon-reload failed: %v\n", err)
-	}
+	// Silently ignore errors - systemctl --user doesn't work well under sudo
+	cmd.Run()
 	
 	return nil
 }
@@ -519,11 +516,8 @@ func enableSystemdService(m *model) error {
 		// Run as the actual user, not root
 		cmd = exec.Command("sudo", "-u", sudoUser, "systemctl", "--user", "enable", "sysc-walls.service")
 	}
-	
-	if err := cmd.Run(); err != nil {
-		// Don't fail on enable errors - user can enable manually
-		fmt.Printf("Warning: service enable failed: %v\n", err)
-	}
+	// Silently ignore errors - systemctl --user doesn't work well under sudo
+	cmd.Run()
 	
 	return nil
 }

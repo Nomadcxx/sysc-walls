@@ -387,9 +387,12 @@ func checkPrivileges(m *model) error {
 }
 
 func stopDaemon(m *model) error {
-	// Stop the daemon if it's running
-	cmd := exec.Command("systemctl", "stop", "sysc-walls.service")
-	return cmd.Run()
+	// Stop the user daemon if it's running
+	cmd := exec.Command("systemctl", "--user", "stop", "sysc-walls.service")
+	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", os.Getuid()))
+	// Ignore errors - service might not be running
+	cmd.Run()
+	return nil
 }
 
 func buildBinaries(m *model) error {

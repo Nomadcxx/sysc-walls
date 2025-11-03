@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/logo.png" alt="sysc-walls" width="600">
+  <img src="assets/logo.png" alt="sysc-walls">
   
   **Terminal screensaver with animations and idle detection**
   

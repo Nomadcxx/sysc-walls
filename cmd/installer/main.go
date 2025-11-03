@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -455,9 +456,10 @@ func installSystemdService(m *model) error {
 	projectRoot := getProjectRoot()
 	srcPath := filepath.Join(projectRoot, "systemd", "sysc-walls-user.service")
 	
-	// Get the actual user's home directory (not root when using sudo)
+	// Get the actual user's home directory and UID (not root when using sudo)
 	homeDir := os.Getenv("HOME")
-	if sudoUser := os.Getenv("SUDO_USER"); sudoUser != "" {
+	sudoUser := os.Getenv("SUDO_USER")
+	if sudoUser != "" {
 		homeDir = "/home/" + sudoUser
 	}
 	
@@ -481,16 +483,49 @@ func installSystemdService(m *model) error {
 		return fmt.Errorf("failed to install systemd service: %v", err)
 	}
 
-	// Reload user systemd
+	// Get actual user UID for systemctl commands
+	actualUID := os.Getuid()
+	if sudoUser != "" {
+		// Get the UID of the sudo user
+		cmd := exec.Command("id", "-u", sudoUser)
+		output, err := cmd.Output()
+		if err == nil {
+			if uid, err := strconv.Atoi(strings.TrimSpace(string(output))); err == nil {
+				actualUID = uid
+			}
+		}
+	}
+
+	// Reload user systemd as the actual user
 	cmd := exec.Command("systemctl", "--user", "daemon-reload")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", os.Getuid()))
-	return cmd.Run()
+	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID))
+	if sudoUser != "" {
+		// Run as the actual user, not root
+		cmd = exec.Command("sudo", "-u", sudoUser, "systemctl", "--user", "daemon-reload")
+	}
+	if err := cmd.Run(); err != nil {
+		// Don't fail on daemon-reload errors
+		fmt.Printf("Warning: daemon-reload failed: %v\n", err)
+	}
+	
+	return nil
 }
 
 func enableSystemdService(m *model) error {
+	sudoUser := os.Getenv("SUDO_USER")
+	
 	cmd := exec.Command("systemctl", "--user", "enable", "sysc-walls.service")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", os.Getuid()))
-	return cmd.Run()
+	if sudoUser != "" {
+		// Run as the actual user, not root
+		cmd = exec.Command("sudo", "-u", sudoUser, "systemctl", "--user", "enable", "sysc-walls.service")
+	}
+	
+	if err := cmd.Run(); err != nil {
+		// Don't fail on enable errors - user can enable manually
+		fmt.Printf("Warning: service enable failed: %v\n", err)
+	}
+	
+	return nil
 }
 
 func removeBinaries(m *model) error {

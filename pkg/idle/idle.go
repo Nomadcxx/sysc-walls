@@ -88,7 +88,7 @@ func detectDisplayServer() string {
 
 // startWaylandIdleDetection starts native Wayland idle detection using ext-idle-notify-v1
 func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
-	log.Println("Starting Wayland idle detection using ext-idle-notify-v1")
+	log.Println("Starting Wayland idle detection using CGO bindings to native libwayland")
 
 	// Create Wayland idle detector
 	onIdle := func() {
@@ -123,9 +123,9 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 		}
 	}
 
-	waylandDetector, err := NewWaylandIdleDetector(d.idleTimeout, onIdle, onResume)
+	waylandDetector, err := NewWaylandCGODetector(d.idleTimeout, onIdle, onResume)
 	if err != nil {
-		log.Printf("Failed to create Wayland idle detector: %v", err)
+		log.Printf("Failed to create Wayland CGO detector: %v", err)
 		log.Println("Falling back to X11 detection if available")
 		d.startX11Monitor(ctx)
 		return err
@@ -133,7 +133,7 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 
 	// Start the Wayland detector
 	if err := waylandDetector.Start(); err != nil {
-		log.Printf("Failed to start Wayland idle detector: %v", err)
+		log.Printf("Failed to start Wayland CGO detector: %v", err)
 		return err
 	}
 

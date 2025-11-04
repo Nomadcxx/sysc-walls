@@ -104,6 +104,8 @@ func (w *WaylandCGODetector) Start() error {
 	// Run event loop in goroutine with proper polling
 	go func() {
 		log.Println("Starting Wayland CGO event loop")
+		lastHeartbeat := time.Now()
+		pollCount := 0
 		
 		for {
 			select {
@@ -137,6 +139,14 @@ func (w *WaylandCGODetector) Start() error {
 						log.Printf("Wayland dispatch error: %d", dispatchRet)
 						return
 					}
+				}
+				
+				// Heartbeat logging every 30 seconds
+				pollCount++
+				if time.Since(lastHeartbeat) >= 30*time.Second {
+					log.Printf("[Heartbeat] Wayland event loop active, polls: %d", pollCount)
+					lastHeartbeat = time.Now()
+					pollCount = 0
 				}
 			}
 		}

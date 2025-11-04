@@ -36,8 +36,8 @@ func NewIdleDetector(cfg *config.Config) *IdleDetector {
 	return &IdleDetector{
 		config:      cfg,
 		idleTimeout: cfg.GetIdleTimeout(),
-		idleChan:    make(chan struct{}, 1),
-		resumeChan:  make(chan struct{}, 1),
+		idleChan:    make(chan struct{}, 10),  // Larger buffer to prevent drops
+		resumeChan:  make(chan struct{}, 10),  // Larger buffer to prevent drops
 		lastActive:  time.Now(),
 	}
 }

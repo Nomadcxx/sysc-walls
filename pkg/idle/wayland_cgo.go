@@ -5,7 +5,6 @@ package idle
 #cgo pkg-config: wayland-client
 #cgo CFLAGS: -I${SRCDIR}/wayland-protocols
 #include <stdint.h>
-#include <poll.h>
 
 // External C functions defined in wayland_idle.c
 int wayland_cgo_init();
@@ -20,6 +19,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"syscall"
 	"time"
 	"unsafe"
 )
@@ -98,15 +98,11 @@ func (w *WaylandCGODetector) Start() error {
 		return fmt.Errorf("failed to get Wayland FD")
 	}
 
+	log.Printf("Using Wayland FD: %d for polling", fd)
+
 	// Run event loop in goroutine with proper polling
 	go func() {
 		log.Println("Starting Wayland CGO event loop")
-		
-		// Use syscall to poll the Wayland FD
-		pollfd := C.struct_pollfd{
-			fd:     C.int(fd),
-			events: C.POLLIN,
-		}
 		
 		for {
 			select {
@@ -114,14 +110,22 @@ func (w *WaylandCGODetector) Start() error {
 				log.Println("Wayland CGO event loop stopped")
 				return
 			default:
+				// Use Go's syscall.Poll instead of C poll
+				pollFds := []syscall.PollFd{
+					{
+						Fd:     int32(fd),
+						Events: syscall.POLLIN,
+					},
+				}
+				
 				// Poll with 100ms timeout to allow checking ctx
-				ret := C.poll(&pollfd, 1, 100)
-				if ret < 0 {
-					log.Printf("Poll error: %d", ret)
+				n, err := syscall.Poll(pollFds, 100)
+				if err != nil {
+					log.Printf("Poll error: %v", err)
 					return
 				}
 				
-				if ret > 0 && (pollfd.revents&C.POLLIN) != 0 {
+				if n > 0 && (pollFds[0].Revents&syscall.POLLIN) != 0 {
 					// Dispatch pending events
 					dispatchRet := C.wayland_cgo_dispatch()
 					if dispatchRet < 0 {

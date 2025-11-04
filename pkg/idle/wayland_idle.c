@@ -110,19 +110,28 @@ int wayland_cgo_dispatch() {
 		return -1;
 	}
 
-	// Use non-blocking dispatch like swayidle
-	// First try to dispatch pending events without blocking
-	int ret = wl_display_dispatch_pending(display);
-	if (ret < 0) {
-		return -2;
+	// Prepare to read from the display
+	// This must be called before reading events
+	while (wl_display_prepare_read(display) != 0) {
+		// If prepare_read returns non-zero, there are pending events
+		// Dispatch them first
+		if (wl_display_dispatch_pending(display) < 0) {
+			return -2;
+		}
 	}
-	
-	// Flush any outgoing requests
-	if (wl_display_flush(display) < 0) {
+
+	// Read events from the socket
+	if (wl_display_read_events(display) < 0) {
+		wl_display_cancel_read(display);
 		return -3;
 	}
 
-	return ret;
+	// Now dispatch the events we just read
+	if (wl_display_dispatch_pending(display) < 0) {
+		return -4;
+	}
+
+	return 0;
 }
 
 // Get the Wayland display file descriptor for polling

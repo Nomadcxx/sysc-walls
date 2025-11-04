@@ -122,6 +122,10 @@ func (w *WaylandCGODetector) Start() error {
 				// Poll with 100ms timeout to allow checking ctx
 				n, err := unix.Poll(pollFds, 100)
 				if err != nil {
+					// EINTR is expected when signals are delivered (like Ctrl+C)
+					if err == unix.EINTR {
+						continue
+					}
 					log.Printf("Poll error: %v", err)
 					return
 				}

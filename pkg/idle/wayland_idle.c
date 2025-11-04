@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <wayland-client.h>
 #include "wayland-protocols/ext-idle-notify-v1-client-protocol.h"
 
@@ -19,11 +20,15 @@ extern void goResumeCallback();
 
 // C callback handlers
 static void handle_idle(void *data, struct ext_idle_notification_v1 *notification) {
-goIdleCallback();
+	fprintf(stderr, "[C] Idle callback triggered\n");
+	fflush(stderr);
+	goIdleCallback();
 }
 
 static void handle_resume(void *data, struct ext_idle_notification_v1 *notification) {
-goResumeCallback();
+	fprintf(stderr, "[C] Resume callback triggered\n");
+	fflush(stderr);
+	goResumeCallback();
 }
 
 static const struct ext_idle_notification_v1_listener idle_notification_listener = {
@@ -101,15 +106,31 @@ return 0;
 }
 
 int wayland_cgo_dispatch() {
-if (!display) {
-return -1;
+	if (!display) {
+		return -1;
+	}
+
+	// Use non-blocking dispatch like swayidle
+	// First try to dispatch pending events without blocking
+	int ret = wl_display_dispatch_pending(display);
+	if (ret < 0) {
+		return -2;
+	}
+	
+	// Flush any outgoing requests
+	if (wl_display_flush(display) < 0) {
+		return -3;
+	}
+
+	return ret;
 }
 
-if (wl_display_dispatch(display) == -1) {
-return -2;
-}
-
-return 0;
+// Get the Wayland display file descriptor for polling
+int wayland_cgo_get_fd() {
+	if (!display) {
+		return -1;
+	}
+	return wl_display_get_fd(display);
 }
 
 void wayland_cgo_cleanup() {

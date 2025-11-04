@@ -5,11 +5,13 @@ package idle
 #cgo pkg-config: wayland-client
 #cgo CFLAGS: -I${SRCDIR}/wayland-protocols
 #include <stdint.h>
+#include <poll.h>
 
 // External C functions defined in wayland_idle.c
 int wayland_cgo_init();
 int wayland_cgo_register_timeout(uint32_t timeout_ms);
 int wayland_cgo_dispatch();
+int wayland_cgo_get_fd();
 void wayland_cgo_cleanup();
 */
 import "C"
@@ -90,19 +92,42 @@ func (w *WaylandCGODetector) Start() error {
 		return fmt.Errorf("detector not initialized")
 	}
 
-	// Run event loop in goroutine
+	// Get the Wayland file descriptor for polling
+	fd := int(C.wayland_cgo_get_fd())
+	if fd < 0 {
+		return fmt.Errorf("failed to get Wayland FD")
+	}
+
+	// Run event loop in goroutine with proper polling
 	go func() {
 		log.Println("Starting Wayland CGO event loop")
+		
+		// Use syscall to poll the Wayland FD
+		pollfd := C.struct_pollfd{
+			fd:     C.int(fd),
+			events: C.POLLIN,
+		}
+		
 		for {
 			select {
 			case <-w.ctx.Done():
 				log.Println("Wayland CGO event loop stopped")
 				return
 			default:
-				ret := C.wayland_cgo_dispatch()
-				if ret != 0 {
-					log.Printf("Wayland dispatch error: %d", ret)
+				// Poll with 100ms timeout to allow checking ctx
+				ret := C.poll(&pollfd, 1, 100)
+				if ret < 0 {
+					log.Printf("Poll error: %d", ret)
 					return
+				}
+				
+				if ret > 0 && (pollfd.revents&C.POLLIN) != 0 {
+					// Dispatch pending events
+					dispatchRet := C.wayland_cgo_dispatch()
+					if dispatchRet < 0 {
+						log.Printf("Wayland dispatch error: %d", dispatchRet)
+						return
+					}
 				}
 			}
 		}

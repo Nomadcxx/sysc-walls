@@ -297,8 +297,8 @@ func (d *Daemon) StopScreensaver() {
 			log.Printf("SystemD stop failed: %v, trying pkill fallback", err)
 		}
 		
-		// Fallback: directly kill by window class
-		killCmd := exec.Command("pkill", "-f", "sysc-walls-screensaver")
+		// Fallback: kill by specific class name to avoid killing all kitty instances
+		killCmd := exec.Command("pkill", "-f", "kitty.*--class.*sysc-walls-screensaver")
 		if err := killCmd.Run(); err != nil {
 			if d.debug {
 				log.Printf("pkill fallback also failed: %v", err)

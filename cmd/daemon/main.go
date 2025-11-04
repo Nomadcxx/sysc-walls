@@ -214,6 +214,7 @@ func (d *Daemon) eventLoop() {
 			d.idleTimer.Stop()
 			d.onIdle()
 		case <-d.idleDet.Events().Resume:
+			log.Println("Daemon received resume event from channel")
 			if d.debug {
 				log.Println("Idle detector resume")
 			}
@@ -229,12 +230,14 @@ func (d *Daemon) eventLoop() {
 
 // onActivity handles user activity (stop screensaver, reset timer)
 func (d *Daemon) onActivity() {
+	log.Println("onActivity called - stopping screensaver")
 	if d.debug {
 		log.Println("User activity detected")
 	}
 
 	d.resetIdleTimer()
 	d.StopScreensaver()
+	log.Println("onActivity completed")
 }
 
 // onIdle handles idle timeout (launch screensaver)

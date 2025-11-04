@@ -92,6 +92,7 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 
 	// Create Wayland idle detector
 	onIdle := func() {
+		log.Println("[Go callback] Wayland idle callback invoked")
 		// Fire idle event
 		select {
 		case d.idleChan <- struct{}{}:
@@ -99,11 +100,12 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 				log.Println("Idle event fired")
 			}
 		default:
-			// Channel already has a value, don't block
+			log.Println("[WARNING] Idle channel full, event dropped!")
 		}
 	}
 
 	onResume := func() {
+		log.Println("[Go callback] Wayland resume callback invoked")
 		d.lastActive = time.Now()
 		
 		// Fire resume event
@@ -113,7 +115,7 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 				log.Println("Resume event fired")
 			}
 		default:
-			// Channel already has a value, don't block
+			log.Println("[WARNING] Resume channel full, event dropped!")
 		}
 
 		// Clear any pending idle event

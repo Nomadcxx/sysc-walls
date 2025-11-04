@@ -55,22 +55,34 @@ func (s *SystemD) LaunchScreensaver(command string) error {
 
 // StopScreensaver stops the screensaver
 func (s *SystemD) StopScreensaver() error {
+	fmt.Printf("SystemD.StopScreensaver called - processID=%v cmd=%v\n", s.processID, s.cmd)
+	
 	if s.processID == nil || s.cmd == nil {
-		return fmt.Errorf("screensaver is not running")
+		fmt.Println("SystemD has no tracked process, trying pkill anyway")
+		// Don't return error, try pkill as fallback
+		killCmd := exec.Command("pkill", "-f", "kitty.*--class.*sysc-walls-screensaver")
+		if err := killCmd.Run(); err != nil {
+			return fmt.Errorf("pkill failed and no tracked process: %w", err)
+		}
+		fmt.Println("Killed via pkill despite no tracked process")
+		return nil
 	}
+
+	fmt.Printf("Attempting to kill process with PID: %d\n", *s.processID)
 
 	// First, try to kill just the screensaver kitty window by class name
 	// This prevents killing all kitty instances
 	killCmd := exec.Command("pkill", "-f", "kitty.*--class.*sysc-walls-screensaver")
 	if err := killCmd.Run(); err != nil {
-		if s.config.IsDebug() {
-			fmt.Printf("pkill by class failed: %v, falling back to PID kill\n", err)
-		}
+		fmt.Printf("pkill by class failed: %v, falling back to PID kill\n", err)
 		
 		// Fallback: kill the process tree starting from our PID
 		if err := s.cmd.Process.Kill(); err != nil {
 			return fmt.Errorf("failed to stop screensaver: %w", err)
 		}
+		fmt.Println("Killed via Process.Kill()")
+	} else {
+		fmt.Println("Killed via pkill by class")
 	}
 
 	// Wait for the process to finish

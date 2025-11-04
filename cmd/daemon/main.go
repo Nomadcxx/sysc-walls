@@ -290,34 +290,25 @@ func (d *Daemon) LaunchScreensaver() {
 
 // StopScreensaver stops the screensaver
 func (d *Daemon) StopScreensaver() {
-	if d.debug {
-		log.Println("Stopping screensaver")
-	}
+	log.Println("StopScreensaver called")
 
 	// First try systemd's tracked process
 	if err := d.systemD.StopScreensaver(); err != nil {
-		if d.debug {
-			log.Printf("SystemD stop failed: %v, trying pkill fallback", err)
-		}
+		log.Printf("SystemD stop failed: %v, trying pkill fallback", err)
 		
 		// Fallback: kill by specific class name to avoid killing all kitty instances
 		killCmd := exec.Command("pkill", "-f", "kitty.*--class.*sysc-walls-screensaver")
 		if err := killCmd.Run(); err != nil {
-			if d.debug {
-				log.Printf("pkill fallback also failed: %v", err)
-			}
+			log.Printf("pkill fallback also failed: %v", err)
 		} else {
-			if d.debug {
-				log.Println("Screensaver killed via pkill fallback")
-			}
+			log.Println("Screensaver killed via pkill fallback")
 		}
 	} else {
-		if d.debug {
-			log.Println("Screensaver stopped via SystemD")
-		}
+		log.Println("Screensaver stopped via SystemD")
 	}
 
 	d.saverPID = 0
+	log.Println("StopScreensaver finished")
 }
 
 // Shutdown cleans up resources

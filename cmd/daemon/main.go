@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -256,6 +257,14 @@ func (d *Daemon) resetIdleTimer() {
 
 // LaunchScreensaver starts the screensaver
 func (d *Daemon) LaunchScreensaver() {
+	// Don't launch if already running
+	if d.systemD.IsRunning() {
+		if d.debug {
+			log.Println("Screensaver already running, skipping launch")
+		}
+		return
+	}
+
 	screensaverCmd := d.config.GetScreensaverCommand()
 
 	if d.debug {
@@ -282,8 +291,27 @@ func (d *Daemon) StopScreensaver() {
 		log.Println("Stopping screensaver")
 	}
 
+	// First try systemd's tracked process
 	if err := d.systemD.StopScreensaver(); err != nil {
-		log.Printf("Failed to stop screensaver: %v", err)
+		if d.debug {
+			log.Printf("SystemD stop failed: %v, trying pkill fallback", err)
+		}
+		
+		// Fallback: directly kill by window class
+		killCmd := exec.Command("pkill", "-f", "sysc-walls-screensaver")
+		if err := killCmd.Run(); err != nil {
+			if d.debug {
+				log.Printf("pkill fallback also failed: %v", err)
+			}
+		} else {
+			if d.debug {
+				log.Println("Screensaver killed via pkill fallback")
+			}
+		}
+	} else {
+		if d.debug {
+			log.Println("Screensaver stopped via SystemD")
+		}
 	}
 
 	d.saverPID = 0

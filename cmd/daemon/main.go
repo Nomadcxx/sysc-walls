@@ -252,9 +252,7 @@ func (d *Daemon) onIdle() {
 
 // resetIdleTimer resets the idle timeout timer
 func (d *Daemon) resetIdleTimer() {
-	if !d.idleTimer.Stop() {
-		<-d.idleTimer.C
-	}
+	d.idleTimer.Stop()
 	d.idleTimer.Reset(d.config.GetIdleTimeout())
 }
 

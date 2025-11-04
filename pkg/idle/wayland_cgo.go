@@ -19,9 +19,10 @@ import (
 	"fmt"
 	"log"
 	"sync"
-	"syscall"
 	"time"
 	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
 
 type WaylandCGODetector struct {
@@ -110,22 +111,22 @@ func (w *WaylandCGODetector) Start() error {
 				log.Println("Wayland CGO event loop stopped")
 				return
 			default:
-				// Use Go's syscall.Poll instead of C poll
-				pollFds := []syscall.PollFd{
+				// Use unix.Poll instead of C poll
+				pollFds := []unix.PollFd{
 					{
 						Fd:     int32(fd),
-						Events: syscall.POLLIN,
+						Events: unix.POLLIN,
 					},
 				}
 				
 				// Poll with 100ms timeout to allow checking ctx
-				n, err := syscall.Poll(pollFds, 100)
+				n, err := unix.Poll(pollFds, 100)
 				if err != nil {
 					log.Printf("Poll error: %v", err)
 					return
 				}
 				
-				if n > 0 && (pollFds[0].Revents&syscall.POLLIN) != 0 {
+				if n > 0 && (pollFds[0].Revents&unix.POLLIN) != 0 {
 					// Dispatch pending events
 					dispatchRet := C.wayland_cgo_dispatch()
 					if dispatchRet < 0 {

@@ -1,0 +1,13 @@
+[Unit]
+Description=Test Idle Detector via Systemd
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/home/nomadx/Documents/sysc-screen/test-idle-detector --timeout 10
+Restart=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

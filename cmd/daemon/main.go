@@ -209,6 +209,8 @@ func (d *Daemon) eventLoop() {
 			if d.debug {
 				log.Println("Idle detector triggered")
 			}
+			// Stop timer since we're using native detection
+			d.idleTimer.Stop()
 			d.onIdle()
 		case <-d.idleDet.Events().Resume:
 			if d.debug {
@@ -217,7 +219,7 @@ func (d *Daemon) eventLoop() {
 			d.onActivity()
 		case <-d.idleTimer.C:
 			if d.debug {
-				log.Println("Timer triggered idle")
+				log.Println("Timer triggered idle (fallback)")
 			}
 			d.onIdle()
 		}

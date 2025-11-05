@@ -335,6 +335,20 @@ func (d *Daemon) LaunchScreensaver() {
 			continue
 		}
 
+		// Wait for window to appear before fullscreening
+		time.Sleep(200 * time.Millisecond)
+
+		// Fullscreen the newly launched window (if niri compositor)
+		if niriComp, ok := comp.(*compositor.NiriCompositor); ok {
+			if err := niriComp.FullscreenFocusedWindow(); err != nil {
+				if d.debug {
+					log.Printf("Failed to fullscreen window on %s: %v", output.Name, err)
+				}
+			} else if d.debug {
+				log.Printf("Fullscreened window on %s", output.Name)
+			}
+		}
+
 		// Delay between launches
 		if i < len(outputs)-1 {
 			time.Sleep(150 * time.Millisecond)

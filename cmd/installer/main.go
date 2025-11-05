@@ -414,17 +414,13 @@ func stopDaemon(m *model) error {
 }
 
 func cloneSyscGo(m *model) error {
-	projectRoot := getProjectRoot()
-	syscGoPath := filepath.Join(projectRoot, "sysc-Go")
-
 	// Check if sysc-Go directory already exists
-	if _, err := os.Stat(syscGoPath); err == nil {
+	if _, err := os.Stat("sysc-Go"); err == nil {
 		// Directory exists, check if it's a valid git repo
-		gitDir := filepath.Join(syscGoPath, ".git")
-		if _, err := os.Stat(gitDir); err == nil {
+		if _, err := os.Stat("sysc-Go/.git"); err == nil {
 			// Valid repo exists, pull latest
 			cmd := exec.Command("git", "pull")
-			cmd.Dir = syscGoPath
+			cmd.Dir = "sysc-Go"
 			if err := cmd.Run(); err != nil {
 				// Pull failed, but repo exists, continue anyway
 				return nil
@@ -432,14 +428,13 @@ func cloneSyscGo(m *model) error {
 			return nil
 		}
 		// Directory exists but not a git repo, remove and clone
-		if err := os.RemoveAll(syscGoPath); err != nil {
+		if err := os.RemoveAll("sysc-Go"); err != nil {
 			return fmt.Errorf("failed to remove invalid sysc-Go directory: %v", err)
 		}
 	}
 
 	// Clone sysc-Go repository
 	cmd := exec.Command("git", "clone", "https://github.com/Nomadcxx/sysc-Go.git", "sysc-Go")
-	cmd.Dir = projectRoot
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to clone sysc-Go: %s", string(output))
@@ -453,8 +448,7 @@ func buildBinaries(m *model) error {
 
 	for _, component := range components {
 		// Build each component
-		cmd := exec.Command("go", "build", "-o", component, fmt.Sprintf("./cmd/%s/", component))
-		cmd.Dir = getProjectRoot()
+		cmd := exec.Command("go", "build", "-buildvcs=false", "-o", component, fmt.Sprintf("./cmd/%s/", component))
 
 		output, err := cmd.CombinedOutput()
 		if err != nil {
@@ -465,7 +459,6 @@ func buildBinaries(m *model) error {
 }
 
 func installBinaries(m *model) error {
-	projectRoot := getProjectRoot()
 	components := []string{"daemon", "display", "client"}
 
 	// Stop the daemon if it's running to avoid "text file busy" error
@@ -473,11 +466,10 @@ func installBinaries(m *model) error {
 	stopCmd.Run() // Ignore errors - service might not be running
 
 	for _, component := range components {
-		srcPath := filepath.Join(projectRoot, component)
 		dstPath := fmt.Sprintf("/usr/local/bin/sysc-walls-%s", component)
 
 		// Read the source file
-		data, err := os.ReadFile(srcPath)
+		data, err := os.ReadFile(component)
 		if err != nil {
 			return fmt.Errorf("failed to read binary %s: %v", component, err)
 		}
@@ -500,8 +492,7 @@ func installBinaries(m *model) error {
 }
 
 func installSystemdService(m *model) error {
-	projectRoot := getProjectRoot()
-	srcPath := filepath.Join(projectRoot, "systemd", "sysc-walls-user.service")
+	srcPath := "systemd/sysc-walls-user.service"
 	
 	// Get the actual user's home directory and UID (not root when using sudo)
 	homeDir := os.Getenv("HOME")
@@ -612,40 +603,8 @@ func removeSystemdService(m *model) error {
 	cmd = exec.Command("systemctl", "--user", "daemon-reload")
 	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", os.Getuid()))
 	cmd.Run()
-	
+
 	return nil
-}
-
-func getProjectRoot() string {
-	// Get the directory where the installer is located
-	execPath, err := os.Executable()
-	if err != nil {
-		// Fallback to current directory
-		return "."
-	}
-
-	// Go up from cmd/installer to project root
-	root := filepath.Dir(filepath.Dir(filepath.Dir(execPath)))
-
-	// Check if go.mod exists to verify this is the project root
-	if _, err := os.Stat(filepath.Join(root, "go.mod")); err == nil {
-		return root
-	}
-
-	// Fallback: try to find go.mod by walking up from current directory
-	dir, _ := os.Getwd()
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-
-	return "."
 }
 
 // loadASCIIHeader loads ASCII art from file or returns default

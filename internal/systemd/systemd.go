@@ -3,30 +3,41 @@ package systemd
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
+	"sync"
 
 	"github.com/Nomadcxx/sysc-walls/internal/config"
 )
 
+// ScreensaverProcess represents a single screensaver process
+type ScreensaverProcess struct {
+	PID    int
+	Cmd    *exec.Cmd
+	Output string // Monitor identifier (e.g., "DP-1", "HDMI-A-0")
+}
+
 // SystemD handles systemd integration
 type SystemD struct {
 	config    *config.Config
-	processID *int
-	cmd       *exec.Cmd
+	processes []ScreensaverProcess
+	mu        sync.Mutex // Protects processes slice
 }
 
 // NewSystemD creates a new SystemD instance
 func NewSystemD(cfg *config.Config) *SystemD {
 	return &SystemD{
 		config:    cfg,
-		processID: nil,
-		cmd:       nil,
+		processes: []ScreensaverProcess{},
 	}
 }
 
-// LaunchScreensaver starts the screensaver
-func (s *SystemD) LaunchScreensaver(command string) error {
+// LaunchScreensaver starts the screensaver on a specific output
+func (s *SystemD) LaunchScreensaver(command string, outputName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	// Parse the command string
 	args, err := parseCommand(command)
 	if err != nil {
@@ -41,101 +52,122 @@ func (s *SystemD) LaunchScreensaver(command string) error {
 		return fmt.Errorf("failed to start screensaver: %w", err)
 	}
 
-	// Store the process ID
-	pid := cmd.Process.Pid
-	s.processID = &pid
-	s.cmd = cmd
+	// Store the process
+	process := ScreensaverProcess{
+		PID:    cmd.Process.Pid,
+		Cmd:    cmd,
+		Output: outputName,
+	}
+	s.processes = append(s.processes, process)
 
 	if s.config.IsDebug() {
-		fmt.Printf("Launched screensaver with PID: %d\n", pid)
+		log.Printf("Launched screensaver on %s with PID: %d", outputName, process.PID)
 	}
 
 	return nil
 }
 
-// StopScreensaver stops the screensaver
+// StopScreensaver stops all screensaver processes
 func (s *SystemD) StopScreensaver() error {
-	fmt.Printf("SystemD.StopScreensaver called - processID=%v cmd=%v\n", s.processID, s.cmd)
-	
-	if s.processID == nil || s.cmd == nil {
-		fmt.Println("SystemD has no tracked process, trying pkill anyway")
-		// Don't return error, try pkill as fallback
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.config.IsDebug() {
+		log.Printf("StopScreensaver called - %d processes tracked", len(s.processes))
+	}
+
+	if len(s.processes) == 0 {
+		if s.config.IsDebug() {
+			log.Println("No tracked processes, trying pkill anyway")
+		}
+		// Fallback: try pkill
 		killCmd := exec.Command("pkill", "-f", "kitty.*--class.*sysc-walls-screensaver")
 		if err := killCmd.Run(); err != nil {
-			return fmt.Errorf("pkill failed and no tracked process: %w", err)
+			return fmt.Errorf("pkill failed and no tracked processes: %w", err)
 		}
-		fmt.Println("Killed via pkill despite no tracked process")
+		if s.config.IsDebug() {
+			log.Println("Killed via pkill despite no tracked processes")
+		}
 		return nil
 	}
 
-	fmt.Printf("Attempting to kill process with PID: %d\n", *s.processID)
-
-	// First, try to kill just the screensaver kitty window by class name
-	// This prevents killing all kitty instances
-	killCmd := exec.Command("pkill", "-f", "kitty.*--class.*sysc-walls-screensaver")
-	if err := killCmd.Run(); err != nil {
-		fmt.Printf("pkill by class failed: %v, falling back to PID kill\n", err)
-		
-		// Fallback: kill the process tree starting from our PID
-		if err := s.cmd.Process.Kill(); err != nil {
-			return fmt.Errorf("failed to stop screensaver: %w", err)
+	// Kill all tracked processes
+	var lastError error
+	for i, process := range s.processes {
+		if s.config.IsDebug() {
+			log.Printf("Killing process %d/%d: PID %d (output: %s)",
+				i+1, len(s.processes), process.PID, process.Output)
 		}
-		fmt.Println("Killed via Process.Kill()")
-	} else {
-		fmt.Println("Killed via pkill by class")
+
+		// Try to kill the process
+		if err := process.Cmd.Process.Kill(); err != nil {
+			log.Printf("Failed to kill PID %d: %v", process.PID, err)
+			lastError = err
+			continue
+		}
+
+		// Wait for process to finish (non-blocking check)
+		go func(cmd *exec.Cmd) {
+			cmd.Wait()
+		}(process.Cmd)
 	}
 
-	// Wait for the process to finish
-	if err := s.cmd.Wait(); err != nil {
-		// Process might have already been killed
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			// This is expected when a process is killed with SIGKILL
-			if exitErr.ExitCode() == -1 {
-				// This is fine, it means the process was killed
-				// Clear the process information
-				s.processID = nil
-				s.cmd = nil
-				return nil
-			}
-		}
-		return fmt.Errorf("error waiting for screensaver process: %w", err)
-	}
-
-	// Clear the process information
-	s.processID = nil
-	s.cmd = nil
+	// Clear all processes
+	s.processes = []ScreensaverProcess{}
 
 	if s.config.IsDebug() {
-		fmt.Println("Stopped screensaver")
+		log.Println("All screensaver processes stopped")
 	}
 
-	return nil
+	return lastError
 }
 
-// IsRunning checks if the screensaver is running
+// IsRunning checks if any screensaver processes are running
 func (s *SystemD) IsRunning() bool {
-	if s.processID == nil || s.cmd == nil {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.processes) == 0 {
 		return false
 	}
 
-	// Check if the process is still running
-	if err := s.cmd.Process.Signal(os.Signal(nil)); err != nil {
-		// Process is not running anymore
-		s.processID = nil
-		s.cmd = nil
-		return false
+	// Check if at least one process is still running
+	stillRunning := []ScreensaverProcess{}
+	for _, process := range s.processes {
+		if err := process.Cmd.Process.Signal(os.Signal(nil)); err == nil {
+			// Process is still running
+			stillRunning = append(stillRunning, process)
+		}
 	}
 
-	return true
+	// Update processes list to only include running processes
+	s.processes = stillRunning
+
+	return len(s.processes) > 0
 }
 
-// GetPID returns the process ID of the screensaver if it's running
-func (s *SystemD) GetPID() (*int, error) {
-	if s.processID == nil {
-		return nil, fmt.Errorf("screensaver is not running")
+// GetPIDs returns the process IDs of all running screensavers
+func (s *SystemD) GetPIDs() ([]int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.processes) == 0 {
+		return nil, fmt.Errorf("no screensaver processes running")
 	}
 
-	return s.processID, nil
+	pids := make([]int, len(s.processes))
+	for i, process := range s.processes {
+		pids[i] = process.PID
+	}
+
+	return pids, nil
+}
+
+// GetProcessCount returns the number of running screensaver processes
+func (s *SystemD) GetProcessCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.processes)
 }
 
 // parseCommand parses a command string into arguments

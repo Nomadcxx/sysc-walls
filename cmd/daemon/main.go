@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Nomadcxx/sysc-walls/internal/compositor"
 	"github.com/Nomadcxx/sysc-walls/internal/config"
 	"github.com/Nomadcxx/sysc-walls/internal/systemd"
 	"github.com/Nomadcxx/sysc-walls/pkg/daemonize"
@@ -24,7 +25,6 @@ import (
 type Daemon struct {
 	config    *config.Config
 	idleTimer *time.Timer
-	saverPID  int
 	ctx       context.Context
 	cancel    context.CancelFunc
 	systemD   *systemd.SystemD
@@ -39,7 +39,6 @@ func NewDaemon(cfg *config.Config) *Daemon {
 	return &Daemon{
 		config:    cfg,
 		idleTimer: time.NewTimer(cfg.GetIdleTimeout()),
-		saverPID:  0,
 		ctx:       ctx,
 		cancel:    cancel,
 		systemD:   systemd.NewSystemD(cfg),
@@ -256,7 +255,7 @@ func (d *Daemon) resetIdleTimer() {
 	d.idleTimer.Reset(d.config.GetIdleTimeout())
 }
 
-// LaunchScreensaver starts the screensaver
+// LaunchScreensaver starts the screensaver on all monitors
 func (d *Daemon) LaunchScreensaver() {
 	// Don't launch if already running
 	if d.systemD.IsRunning() {
@@ -272,41 +271,134 @@ func (d *Daemon) LaunchScreensaver() {
 		log.Printf("Launching screensaver: %s", screensaverCmd)
 	}
 
-	if err := d.systemD.LaunchScreensaver(screensaverCmd); err != nil {
-		log.Printf("Failed to launch screensaver: %v", err)
+	// Detect compositor
+	comp, err := compositor.DetectCompositor()
+	if err != nil {
+		// Fallback: launch single instance without multi-monitor support
+		if d.debug {
+			log.Printf("Compositor detection failed: %v, launching single instance", err)
+		}
+		if err := d.systemD.LaunchScreensaver(screensaverCmd, "default"); err != nil {
+			log.Printf("Failed to launch screensaver: %v", err)
+		}
 		return
 	}
 
-	// Get PID for tracking
-	if pid, err := d.systemD.GetPID(); err == nil && pid != nil {
-		d.saverPID = *pid
+	if d.debug {
+		log.Printf("Detected compositor: %s", comp.Name())
+	}
+
+	// Get all outputs
+	outputs, err := comp.ListOutputs()
+	if err != nil {
+		log.Printf("Failed to list outputs: %v", err)
+		// Fallback: launch single instance
+		if err := d.systemD.LaunchScreensaver(screensaverCmd, "default"); err != nil {
+			log.Printf("Failed to launch screensaver: %v", err)
+		}
+		return
+	}
+
+	if d.debug {
+		log.Printf("Found %d outputs", len(outputs))
+		for _, output := range outputs {
+			log.Printf("  - %s", output.Name)
+		}
+	}
+
+	// Save original focused output for restoration
+	originalFocus, err := comp.GetFocusedOutput()
+	if err != nil {
 		if d.debug {
-			log.Printf("Screensaver launched with PID: %d", d.saverPID)
+			log.Printf("Failed to get focused output: %v", err)
+		}
+		originalFocus = "" // Will skip restoration if empty
+	} else {
+		if d.debug {
+			log.Printf("Original focused output: %s", originalFocus)
+		}
+	}
+
+	// Launch screensaver on each output using sequential focusing
+	for i, output := range outputs {
+		if d.debug {
+			log.Printf("Launching on output %d/%d: %s", i+1, len(outputs), output.Name)
+		}
+
+		// Focus this output
+		if err := comp.FocusOutput(output.Name); err != nil {
+			log.Printf("Failed to focus output %s: %v", output.Name, err)
+			continue
+		}
+
+		// Small delay to ensure focus is applied
+		time.Sleep(100 * time.Millisecond)
+
+		// Launch screensaver (window should follow focus)
+		if err := d.systemD.LaunchScreensaver(screensaverCmd, output.Name); err != nil {
+			log.Printf("Failed to launch screensaver on %s: %v", output.Name, err)
+			continue
+		}
+
+		// Delay between launches
+		if i < len(outputs)-1 {
+			time.Sleep(150 * time.Millisecond)
+		}
+	}
+
+	// Restore original focus
+	if originalFocus != "" {
+		if err := comp.FocusOutput(originalFocus); err != nil {
+			if d.debug {
+				log.Printf("Failed to restore focus to %s: %v", originalFocus, err)
+			}
+		} else {
+			if d.debug {
+				log.Printf("Restored focus to: %s", originalFocus)
+			}
+		}
+	}
+
+	// Log final state
+	processCount := d.systemD.GetProcessCount()
+	if d.debug {
+		log.Printf("Screensaver launched on %d outputs", processCount)
+	}
+	if pids, err := d.systemD.GetPIDs(); err == nil {
+		if d.debug {
+			log.Printf("Process PIDs: %v", pids)
 		}
 	}
 }
 
 // StopScreensaver stops the screensaver
 func (d *Daemon) StopScreensaver() {
-	log.Println("StopScreensaver called")
+	if d.debug {
+		log.Println("StopScreensaver called")
+	}
 
-	// First try systemd's tracked process
+	// First try systemd's tracked processes
 	if err := d.systemD.StopScreensaver(); err != nil {
 		log.Printf("SystemD stop failed: %v, trying pkill fallback", err)
-		
+
 		// Fallback: kill by specific class name to avoid killing all kitty instances
 		killCmd := exec.Command("pkill", "-f", "kitty.*--class.*sysc-walls-screensaver")
 		if err := killCmd.Run(); err != nil {
 			log.Printf("pkill fallback also failed: %v", err)
 		} else {
-			log.Println("Screensaver killed via pkill fallback")
+			if d.debug {
+				log.Println("Screensaver killed via pkill fallback")
+			}
 		}
 	} else {
-		log.Println("Screensaver stopped via SystemD")
+		if d.debug {
+			log.Println("Screensaver stopped via SystemD")
+		}
 	}
 
-	d.saverPID = 0
-	log.Println("StopScreensaver finished")
+	if d.debug {
+		log.Println("StopScreensaver finished")
+	}
 }
 
 // Shutdown cleans up resources

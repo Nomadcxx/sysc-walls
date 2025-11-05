@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/gvalkov/golang-evdev v0.0.0-20220815104727-7e27d6ce89b6
+	github.com/spf13/cobra v1.8.1
 )
 
 require (
@@ -37,4 +38,5 @@ require (
 	gonum.org/v1/gonum v0.16.0 // indirect
 )
 
-replace github.com/Nomadcxx/sysc-Go => ./sysc-Go
+// Temporarily disabled until sysc-Go directory is present
+// replace github.com/Nomadcxx/sysc-Go => ./sysc-Go

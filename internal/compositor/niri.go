@@ -98,3 +98,12 @@ func (n *NiriCompositor) FocusOutput(name string) error {
 	}
 	return nil
 }
+
+// FullscreenFocusedWindow fullscreens the currently focused window
+func (n *NiriCompositor) FullscreenFocusedWindow() error {
+	cmd := exec.Command("niri", "msg", "action", "fullscreen-window")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to fullscreen focused window: %w", err)
+	}
+	return nil
+}

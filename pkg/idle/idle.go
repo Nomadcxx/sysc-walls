@@ -139,6 +139,11 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 		return err
 	}
 
+	// Also start direct input device monitoring as a backup
+	// This catches cases where compositor's idle detection has issues (e.g., niri multi-monitor)
+	log.Println("Starting input device monitoring as backup for Wayland")
+	go d.startInputDeviceMonitor(ctx)
+
 	// Monitor context cancellation and stop the detector
 	go func() {
 		<-ctx.Done()
@@ -242,7 +247,8 @@ func (d *IdleDetector) startInputDeviceMonitor(ctx context.Context) {
 		go d.monitorDevice(ctx, devicePath, activityChan)
 	}
 
-	// Listen for activity signals
+	// Listen for activity signals with rate limiting
+	lastLogTime := time.Now().Add(-10 * time.Second) // Allow first log immediately
 	for {
 		select {
 		case <-ctx.Done():
@@ -254,8 +260,10 @@ func (d *IdleDetector) startInputDeviceMonitor(ctx context.Context) {
 			// Fire resume event immediately
 			select {
 			case d.resumeChan <- struct{}{}:
-				if d.config.IsDebug() {
+				// Only log if debug is enabled AND it's been >5 seconds since last log
+				if d.config.IsDebug() && time.Since(lastLogTime) > 5*time.Second {
 					log.Println("Input device activity detected")
+					lastLogTime = time.Now()
 				}
 			default:
 				// Channel already has a value, don't block

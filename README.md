@@ -11,16 +11,25 @@
 
 A screensaver for your terminal. Watches for idle activity on Wayland (or X11), then displays animations from [sysc-Go](https://github.com/Nomadcxx/sysc-Go) when you step away. Runs as a systemd service so it starts with your session.
 
-## Getting Started
+## Quick Install
 
-**Clone and install:**
+**One-line install:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/Nomadcxx/sysc-walls/master/install.sh | sudo bash
+```
+
+Or **manual install:**
 ```bash
 git clone https://github.com/Nomadcxx/sysc-walls.git
 cd sysc-walls
-sudo ./installer
+go run cmd/installer/main.go
 ```
 
-The installer builds everything and sets up the systemd service.
+The installer automatically:
+- Clones the [sysc-Go](https://github.com/Nomadcxx/sysc-Go) animation library
+- Builds all binaries (daemon, display, client)
+- Installs to `/usr/local/bin`
+- Sets up the systemd user service
 
 **Test your installation first:**
 ```bash
@@ -105,6 +114,76 @@ Want to add your own animations or color schemes?
    ```
 
 The config validation will automatically show your new options in error messages and help text.
+
+## Building from Source
+
+### Requirements
+
+- **Go 1.24+** ([install](https://go.dev/doc/install))
+- **Git**
+- **Wayland development libraries** (for Wayland support):
+  ```bash
+  # Arch/Manjaro
+  sudo pacman -S wayland
+
+  # Debian/Ubuntu
+  sudo apt install libwayland-dev
+
+  # Fedora
+  sudo dnf install wayland-devel
+  ```
+- **Kitty terminal** (for the screensaver display)
+
+### Build Steps
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/Nomadcxx/sysc-walls.git
+   cd sysc-walls
+   ```
+
+2. **Clone the animation library:**
+   ```bash
+   git clone https://github.com/Nomadcxx/sysc-Go.git
+   ```
+
+3. **Build all binaries:**
+   ```bash
+   go build -o daemon ./cmd/daemon/
+   go build -o display ./cmd/display/
+   go build -o client ./cmd/client/
+   go build -o installer ./cmd/installer/
+   ```
+
+4. **Install binaries:**
+   ```bash
+   sudo cp daemon /usr/local/bin/sysc-walls-daemon
+   sudo cp display /usr/local/bin/sysc-walls-display
+   sudo cp client /usr/local/bin/sysc-walls-client
+   sudo chmod +x /usr/local/bin/sysc-walls-*
+   ```
+
+5. **Install systemd service:**
+   ```bash
+   mkdir -p ~/.config/systemd/user
+   cp systemd/sysc-walls-user.service ~/.config/systemd/user/sysc-walls.service
+   systemctl --user daemon-reload
+   systemctl --user enable sysc-walls.service
+   systemctl --user start sysc-walls.service
+   ```
+
+### Using the Installer (Recommended)
+
+The installer handles all of the above automatically:
+```bash
+go run cmd/installer/main.go
+```
+
+Or compile it first:
+```bash
+go build -o installer ./cmd/installer/
+sudo ./installer
+```
 
 ## What's Inside
 

@@ -182,6 +182,7 @@ func (m *model) initTasks() {
 	} else {
 		m.tasks = []installTask{
 			{name: "Check privileges", description: "Checking root access", execute: checkPrivileges, status: statusPending},
+			{name: "Clone sysc-Go", description: "Cloning sysc-Go animation library", execute: cloneSyscGo, status: statusPending},
 			{name: "Build binaries", description: "Building sysc-walls components", execute: buildBinaries, status: statusPending},
 			{name: "Install binaries", description: "Installing to /usr/local/bin", execute: installBinaries, status: statusPending},
 			{name: "Install systemd service", description: "Installing systemd service", execute: installSystemdService, status: statusPending},
@@ -409,6 +410,41 @@ func stopDaemon(m *model) error {
 	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", os.Getuid()))
 	// Ignore errors - service might not be running
 	cmd.Run()
+	return nil
+}
+
+func cloneSyscGo(m *model) error {
+	projectRoot := getProjectRoot()
+	syscGoPath := filepath.Join(projectRoot, "sysc-Go")
+
+	// Check if sysc-Go directory already exists
+	if _, err := os.Stat(syscGoPath); err == nil {
+		// Directory exists, check if it's a valid git repo
+		gitDir := filepath.Join(syscGoPath, ".git")
+		if _, err := os.Stat(gitDir); err == nil {
+			// Valid repo exists, pull latest
+			cmd := exec.Command("git", "pull")
+			cmd.Dir = syscGoPath
+			if err := cmd.Run(); err != nil {
+				// Pull failed, but repo exists, continue anyway
+				return nil
+			}
+			return nil
+		}
+		// Directory exists but not a git repo, remove and clone
+		if err := os.RemoveAll(syscGoPath); err != nil {
+			return fmt.Errorf("failed to remove invalid sysc-Go directory: %v", err)
+		}
+	}
+
+	// Clone sysc-Go repository
+	cmd := exec.Command("git", "clone", "https://github.com/Nomadcxx/sysc-Go.git", "sysc-Go")
+	cmd.Dir = projectRoot
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to clone sysc-Go: %s", string(output))
+	}
+
 	return nil
 }
 

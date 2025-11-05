@@ -214,8 +214,8 @@ func (d *Daemon) eventLoop() {
 			d.idleTimer.Stop()
 			d.onIdle()
 		case <-d.idleDet.Events().Resume:
-			log.Println("Daemon received resume event from channel")
 			if d.debug {
+				log.Println("Daemon received resume event from channel")
 				log.Println("Idle detector resume")
 			}
 			d.onActivity()
@@ -230,14 +230,17 @@ func (d *Daemon) eventLoop() {
 
 // onActivity handles user activity (stop screensaver, reset timer)
 func (d *Daemon) onActivity() {
-	log.Println("onActivity called - stopping screensaver")
 	if d.debug {
+		log.Println("onActivity called - stopping screensaver")
 		log.Println("User activity detected")
 	}
 
 	d.resetIdleTimer()
 	d.StopScreensaver()
-	log.Println("onActivity completed")
+
+	if d.debug {
+		log.Println("onActivity completed")
+	}
 }
 
 // onIdle handles idle timeout (launch screensaver)
@@ -288,25 +291,33 @@ func (d *Daemon) LaunchScreensaver() {
 
 // StopScreensaver stops the screensaver
 func (d *Daemon) StopScreensaver() {
-	log.Println("StopScreensaver called")
+	if d.debug {
+		log.Println("StopScreensaver called")
+	}
 
 	// First try systemd's tracked process
 	if err := d.systemD.StopScreensaver(); err != nil {
-		log.Printf("SystemD stop failed: %v, trying pkill fallback", err)
-		
+		if d.debug {
+			log.Printf("SystemD stop failed: %v, trying pkill fallback", err)
+		}
+
 		// Fallback: kill by specific class name to avoid killing all kitty instances
 		killCmd := exec.Command("pkill", "-f", "kitty.*--class.*sysc-walls-screensaver")
 		if err := killCmd.Run(); err != nil {
-			log.Printf("pkill fallback also failed: %v", err)
-		} else {
+			if d.debug {
+				log.Printf("pkill fallback also failed: %v", err)
+			}
+		} else if d.debug {
 			log.Println("Screensaver killed via pkill fallback")
 		}
-	} else {
+	} else if d.debug {
 		log.Println("Screensaver stopped via SystemD")
 	}
 
 	d.saverPID = 0
-	log.Println("StopScreensaver finished")
+	if d.debug {
+		log.Println("StopScreensaver finished")
+	}
 }
 
 // Shutdown cleans up resources

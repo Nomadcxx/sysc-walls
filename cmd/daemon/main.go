@@ -341,6 +341,10 @@ func (d *Daemon) LaunchScreensaver() {
 		}
 	}
 
+	// Give all windows time to fully initialize before restoring focus
+	// This ensures fullscreen windows are properly rendered on all outputs
+	time.Sleep(300 * time.Millisecond)
+
 	// Restore original focus
 	if originalFocus != "" {
 		if err := comp.FocusOutput(originalFocus); err != nil {

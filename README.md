@@ -59,6 +59,53 @@ To test immediately without waiting:
 /usr/local/bin/sysc-walls-daemon -test
 ```
 
+## Adding New Themes & Effects
+
+Want to add your own animations or color schemes?
+
+**Available effects:**
+`matrix`, `fire`, `fireworks`, `rain`, `beams`, `beam-text`, `decrypt`, `pour`, `aquarium`, `print`
+
+**Available themes:**
+`nord`, `dracula`, `gruvbox`, `tokyo-night`, `catppuccin`, `material`, `solarized`, `monochrome`, `transishardjob`
+
+### Adding a New Theme
+
+1. Add your theme palette to `internal/animations/optimized.go` in the `getThemePalette()` function:
+   ```go
+   "my-theme": {"#color1", "#color2", "#color3", ...},
+   ```
+
+2. Register it in `internal/config/config.go` by adding to the `AvailableThemes` slice:
+   ```go
+   var AvailableThemes = []string{
+       // ... existing themes ...
+       "my-theme",
+   }
+   ```
+
+3. Set it in your config:
+   ```ini
+   [animation]
+   theme = my-theme
+   ```
+
+### Adding a New Effect
+
+1. Implement the effect in [sysc-Go](https://github.com/Nomadcxx/sysc-Go) (the animation library)
+
+2. Add support in `internal/animations/optimized.go` by creating a wrapper struct and adding a case to `CreateOptimizedAnimation()`
+
+3. Register it in `internal/config/config.go` by adding to the `AvailableEffects` slice:
+   ```go
+   var AvailableEffects = []string{
+       // ... existing effects ...
+       "my-effect",
+   }
+   ```
+
+The config validation will automatically show your new options in error messages and help text.
+
 ## What's Inside
 
 - **multi-monitor support** - automatically launches on all displays (Niri, Sway, Hyprland)

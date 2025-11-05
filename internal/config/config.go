@@ -11,6 +11,33 @@ import (
 	"time"
 )
 
+// Available animation effects
+var AvailableEffects = []string{
+	"matrix",
+	"fire",
+	"fireworks",
+	"rain",
+	"beams",
+	"beam-text",
+	"decrypt",
+	"pour",
+	"aquarium",
+	"print",
+}
+
+// Available color themes
+var AvailableThemes = []string{
+	"nord",
+	"dracula",
+	"gruvbox",
+	"tokyo-night",
+	"catppuccin",
+	"material",
+	"solarized",
+	"monochrome",
+	"transishardjob",
+}
+
 // Config represents the daemon configuration
 type Config struct {
 	idleTimeout        time.Duration
@@ -115,9 +142,19 @@ func (c *Config) parseConfigLine(key, value string) {
 			c.debug = boolVal
 		}
 	case "animation.effect":
-		c.animationEffect = value
+		if IsValidEffect(value) {
+			c.animationEffect = value
+		} else {
+			fmt.Fprintf(os.Stderr, "Warning: Invalid animation effect '%s' in config file. Using default.\n", value)
+			fmt.Fprintf(os.Stderr, "Available effects: %s\n", strings.Join(AvailableEffects, ", "))
+		}
 	case "animation.theme":
-		c.animationTheme = value
+		if IsValidTheme(value) {
+			c.animationTheme = value
+		} else {
+			fmt.Fprintf(os.Stderr, "Warning: Invalid animation theme '%s' in config file. Using default.\n", value)
+			fmt.Fprintf(os.Stderr, "Available themes: %s\n", strings.Join(AvailableThemes, ", "))
+		}
 	case "animation.cycle":
 		if boolVal, err := strconv.ParseBool(value); err == nil {
 			c.cycleAnimations = boolVal
@@ -192,7 +229,9 @@ func (c *Config) createDefaultConfig(configPath string) error {
 		"",
 		"[animation]",
 		fmt.Sprintf("effect = %s", c.animationEffect),
+		"# Available effects: " + strings.Join(AvailableEffects, ", "),
 		fmt.Sprintf("theme = %s", c.animationTheme),
+		"# Available themes: " + strings.Join(AvailableThemes, ", "),
 		fmt.Sprintf("cycle = %t", c.cycleAnimations),
 		"",
 		"[terminal]",
@@ -259,7 +298,9 @@ func (c *Config) SaveToFile(configPath string) error {
 		"",
 		"[animation]",
 		fmt.Sprintf("effect = %s", c.animationEffect),
+		"# Available effects: " + strings.Join(AvailableEffects, ", "),
 		fmt.Sprintf("theme = %s", c.animationTheme),
+		"# Available themes: " + strings.Join(AvailableThemes, ", "),
 		fmt.Sprintf("cycle = %t", c.cycleAnimations),
 		"",
 		"[terminal]",
@@ -311,9 +352,13 @@ func (c *Config) GetAnimationEffect() string {
 	return c.animationEffect
 }
 
-// SetAnimationEffect sets the animation effect
-func (c *Config) SetAnimationEffect(effect string) {
+// SetAnimationEffect sets the animation effect with validation
+func (c *Config) SetAnimationEffect(effect string) error {
+	if !IsValidEffect(effect) {
+		return fmt.Errorf("invalid animation effect: %s\nAvailable effects: %s", effect, strings.Join(AvailableEffects, ", "))
+	}
 	c.animationEffect = effect
+	return nil
 }
 
 // GetAnimationTheme returns the default animation theme
@@ -321,9 +366,33 @@ func (c *Config) GetAnimationTheme() string {
 	return c.animationTheme
 }
 
-// SetAnimationTheme sets the animation theme
-func (c *Config) SetAnimationTheme(theme string) {
+// SetAnimationTheme sets the animation theme with validation
+func (c *Config) SetAnimationTheme(theme string) error {
+	if !IsValidTheme(theme) {
+		return fmt.Errorf("invalid animation theme: %s\nAvailable themes: %s", theme, strings.Join(AvailableThemes, ", "))
+	}
 	c.animationTheme = theme
+	return nil
+}
+
+// IsValidEffect checks if the effect is valid
+func IsValidEffect(effect string) bool {
+	for _, e := range AvailableEffects {
+		if e == effect {
+			return true
+		}
+	}
+	return false
+}
+
+// IsValidTheme checks if the theme is valid
+func IsValidTheme(theme string) bool {
+	for _, t := range AvailableThemes {
+		if t == theme {
+			return true
+		}
+	}
+	return false
 }
 
 // ShouldCycleAnimations returns whether animations should be cycled

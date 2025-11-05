@@ -14,17 +14,29 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/Nomadcxx/sysc-walls/internal/compositor"
 	"github.com/Nomadcxx/sysc-walls/internal/config"
 	"github.com/Nomadcxx/sysc-walls/internal/systemd"
 	"github.com/Nomadcxx/sysc-walls/pkg/daemonize"
 	"github.com/Nomadcxx/sysc-walls/pkg/idle"
 )
 
+// Nord theme colors matching installer
+var (
+	colorPrimary   = lipgloss.NewStyle().Foreground(lipgloss.Color("#00c2ff"))        // Cyan
+	colorSecondary = lipgloss.NewStyle().Foreground(lipgloss.Color("#8b95ff"))        // Purple
+	colorAccent    = lipgloss.NewStyle().Foreground(lipgloss.Color("#00ff88"))        // Green
+	colorMuted     = lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))        // Dark gray
+	colorError     = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff4d4d"))        // Red
+	colorWarning   = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffbb33"))        // Orange
+	colorBold      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00c2ff"))
+)
+
 // Daemon struct to manage screensaver lifecycle
 type Daemon struct {
 	config    *config.Config
 	idleTimer *time.Timer
-	saverPID  int
 	ctx       context.Context
 	cancel    context.CancelFunc
 	systemD   *systemd.SystemD
@@ -39,7 +51,6 @@ func NewDaemon(cfg *config.Config) *Daemon {
 	return &Daemon{
 		config:    cfg,
 		idleTimer: time.NewTimer(cfg.GetIdleTimeout()),
-		saverPID:  0,
 		ctx:       ctx,
 		cancel:    cancel,
 		systemD:   systemd.NewSystemD(cfg),
@@ -142,29 +153,12 @@ func main() {
 
 	// Test mode - activate screensaver immediately
 	if *test {
-		fmt.Println("Test mode: Activating screensaver immediately...")
-		daemon.debug = true
-		daemon.LaunchScreensaver()
-		fmt.Println("Screensaver activated in test mode. Press Ctrl+C to stop.")
-
-		// Wait for interrupt signal
-		<-c
-		fmt.Println("Test mode: Stopping screensaver...")
-		daemon.StopScreensaver()
-		daemon.Shutdown()
+		showTestMode(daemon, *debug, c)
 		return
 	}
 
 	// No command specified, print usage
-	fmt.Println("Usage: sysc-walls-daemon [options]")
-	fmt.Println("Options:")
-	fmt.Println("  -start              Start the daemon (requires sudo)")
-	fmt.Println("  -stop               Stop the daemon (requires sudo)")
-	fmt.Println("  -test               Test mode - activate screensaver immediately")
-	fmt.Println("  -daemon             Run as daemon (background)")
-	fmt.Println("  -config             Path to config file")
-	fmt.Println("  -debug              Enable debug logging")
-	flag.PrintDefaults()
+	showUsage()
 }
 
 // Run starts the main daemon loop
@@ -214,8 +208,8 @@ func (d *Daemon) eventLoop() {
 			d.idleTimer.Stop()
 			d.onIdle()
 		case <-d.idleDet.Events().Resume:
+			log.Println("Daemon received resume event from channel")
 			if d.debug {
-				log.Println("Daemon received resume event from channel")
 				log.Println("Idle detector resume")
 			}
 			d.onActivity()
@@ -230,17 +224,14 @@ func (d *Daemon) eventLoop() {
 
 // onActivity handles user activity (stop screensaver, reset timer)
 func (d *Daemon) onActivity() {
+	log.Println("onActivity called - stopping screensaver")
 	if d.debug {
-		log.Println("onActivity called - stopping screensaver")
 		log.Println("User activity detected")
 	}
 
 	d.resetIdleTimer()
 	d.StopScreensaver()
-
-	if d.debug {
-		log.Println("onActivity completed")
-	}
+	log.Println("onActivity completed")
 }
 
 // onIdle handles idle timeout (launch screensaver)
@@ -259,7 +250,7 @@ func (d *Daemon) resetIdleTimer() {
 	d.idleTimer.Reset(d.config.GetIdleTimeout())
 }
 
-// LaunchScreensaver starts the screensaver
+// LaunchScreensaver starts the screensaver on all monitors
 func (d *Daemon) LaunchScreensaver() {
 	// Don't launch if already running
 	if d.systemD.IsRunning() {
@@ -275,16 +266,102 @@ func (d *Daemon) LaunchScreensaver() {
 		log.Printf("Launching screensaver: %s", screensaverCmd)
 	}
 
-	if err := d.systemD.LaunchScreensaver(screensaverCmd); err != nil {
-		log.Printf("Failed to launch screensaver: %v", err)
+	// Detect compositor
+	comp, err := compositor.DetectCompositor()
+	if err != nil {
+		// Fallback: launch single instance without multi-monitor support
+		if d.debug {
+			log.Printf("Compositor detection failed: %v, launching single instance", err)
+		}
+		if err := d.systemD.LaunchScreensaver(screensaverCmd, "default"); err != nil {
+			log.Printf("Failed to launch screensaver: %v", err)
+		}
 		return
 	}
 
-	// Get PID for tracking
-	if pid, err := d.systemD.GetPID(); err == nil && pid != nil {
-		d.saverPID = *pid
+	if d.debug {
+		log.Printf("Detected compositor: %s", comp.Name())
+	}
+
+	// Get all outputs
+	outputs, err := comp.ListOutputs()
+	if err != nil {
+		log.Printf("Failed to list outputs: %v", err)
+		// Fallback: launch single instance
+		if err := d.systemD.LaunchScreensaver(screensaverCmd, "default"); err != nil {
+			log.Printf("Failed to launch screensaver: %v", err)
+		}
+		return
+	}
+
+	if d.debug {
+		log.Printf("Found %d outputs", len(outputs))
+		for _, output := range outputs {
+			log.Printf("  - %s", output.Name)
+		}
+	}
+
+	// Save original focused output for restoration
+	originalFocus, err := comp.GetFocusedOutput()
+	if err != nil {
 		if d.debug {
-			log.Printf("Screensaver launched with PID: %d", d.saverPID)
+			log.Printf("Failed to get focused output: %v", err)
+		}
+		originalFocus = "" // Will skip restoration if empty
+	} else {
+		if d.debug {
+			log.Printf("Original focused output: %s", originalFocus)
+		}
+	}
+
+	// Launch screensaver on each output using sequential focusing
+	for i, output := range outputs {
+		if d.debug {
+			log.Printf("Launching on output %d/%d: %s", i+1, len(outputs), output.Name)
+		}
+
+		// Focus this output
+		if err := comp.FocusOutput(output.Name); err != nil {
+			log.Printf("Failed to focus output %s: %v", output.Name, err)
+			continue
+		}
+
+		// Small delay to ensure focus is applied
+		time.Sleep(100 * time.Millisecond)
+
+		// Launch screensaver (window should follow focus)
+		if err := d.systemD.LaunchScreensaver(screensaverCmd, output.Name); err != nil {
+			log.Printf("Failed to launch screensaver on %s: %v", output.Name, err)
+			continue
+		}
+
+		// Delay between launches
+		if i < len(outputs)-1 {
+			time.Sleep(150 * time.Millisecond)
+		}
+	}
+
+	// Restore original focus
+	if originalFocus != "" {
+		if err := comp.FocusOutput(originalFocus); err != nil {
+			if d.debug {
+				log.Printf("Failed to restore focus to %s: %v", originalFocus, err)
+			}
+		} else {
+			if d.debug {
+				log.Printf("Restored focus to: %s", originalFocus)
+			}
+		}
+	}
+
+	// Log final state
+	processCount := d.systemD.GetProcessCount()
+	if d.debug {
+		log.Printf("Screensaver launched on %d outputs", processCount)
+	}
+	if pids, err := d.systemD.GetPIDs(); err == nil {
+		if d.debug {
+			log.Printf("Process PIDs: %v", pids)
 		}
 	}
 }
@@ -295,26 +372,25 @@ func (d *Daemon) StopScreensaver() {
 		log.Println("StopScreensaver called")
 	}
 
-	// First try systemd's tracked process
+	// First try systemd's tracked processes
 	if err := d.systemD.StopScreensaver(); err != nil {
-		if d.debug {
-			log.Printf("SystemD stop failed: %v, trying pkill fallback", err)
-		}
+		log.Printf("SystemD stop failed: %v, trying pkill fallback", err)
 
 		// Fallback: kill by specific class name to avoid killing all kitty instances
 		killCmd := exec.Command("pkill", "-f", "kitty.*--class.*sysc-walls-screensaver")
 		if err := killCmd.Run(); err != nil {
+			log.Printf("pkill fallback also failed: %v", err)
+		} else {
 			if d.debug {
-				log.Printf("pkill fallback also failed: %v", err)
+				log.Println("Screensaver killed via pkill fallback")
 			}
-		} else if d.debug {
-			log.Println("Screensaver killed via pkill fallback")
 		}
-	} else if d.debug {
-		log.Println("Screensaver stopped via SystemD")
+	} else {
+		if d.debug {
+			log.Println("Screensaver stopped via SystemD")
+		}
 	}
 
-	d.saverPID = 0
 	if d.debug {
 		log.Println("StopScreensaver finished")
 	}
@@ -352,4 +428,145 @@ func setupLogging() {
 
 	// Redirect stdout and stderr to log file
 	log.SetOutput(f)
+}
+
+// loadASCII loads the ASCII art from ascii.txt
+func loadASCII() string {
+	// Try to load from ascii.txt in current directory or project root
+	paths := []string{
+		"ascii.txt",
+		"../ascii.txt",
+		"../../ascii.txt",
+	}
+
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err == nil {
+			return strings.TrimSpace(string(data))
+		}
+	}
+
+	// Fallback ASCII if file not found
+	return `▄▀▀▀▀ █   █ ▄▀▀▀▀ ▄▀▀▀▀          ▄▀ █   █
+ ▀▀▀▄ ▀▀▀▀█  ▀▀▀▄ █     ▀▀▀▀▀  ▄▀   █ █ █
+▀▀▀▀  ▀▀▀▀▀ ▀▀▀▀   ▀▀▀▀       ▀      ▀ ▀`
+}
+
+// showTestMode displays the test mode interface
+func showTestMode(daemon *Daemon, debugMode bool, sigChan chan os.Signal) {
+	// Show ASCII art header
+	ascii := loadASCII()
+	fmt.Println()
+	fmt.Println(colorPrimary.Render(ascii))
+	fmt.Println()
+	fmt.Println(colorBold.Render("        TEST MODE"))
+	fmt.Println()
+
+	daemon.debug = true
+
+	// Show compositor info if debug enabled
+	if debugMode {
+		fmt.Println(colorSecondary.Render("Configuration:"))
+		fmt.Println("  Effect: " + colorAccent.Render(daemon.config.GetAnimationEffect()))
+		fmt.Println("  Theme:  " + colorAccent.Render(daemon.config.GetAnimationTheme()))
+		fmt.Println()
+
+		fmt.Println(colorSecondary.Render("Compositor Detection:"))
+		comp, err := compositor.DetectCompositor()
+		if err != nil {
+			fmt.Println(colorWarning.Render("  ⚠  No compositor detected"))
+			fmt.Println(colorMuted.Render("     Will attempt single-monitor launch"))
+		} else {
+			fmt.Println(colorAccent.Render("  ✓  Detected: ") + colorBold.Render(comp.Name()))
+
+			// List outputs
+			if outputs, err := comp.ListOutputs(); err == nil {
+				fmt.Println()
+				fmt.Println(colorSecondary.Render(fmt.Sprintf("Found %d output(s):", len(outputs))))
+				for i, output := range outputs {
+					focusMarker := ""
+					if output.Focused {
+						focusMarker = colorAccent.Render(" [focused]")
+					}
+					fmt.Printf("  %d. %s%s\n", i+1, output.Name, focusMarker)
+				}
+			}
+		}
+		fmt.Println()
+	}
+
+	fmt.Println(colorSecondary.Render("Launching screensaver..."))
+	startTime := time.Now()
+	daemon.LaunchScreensaver()
+	elapsed := time.Since(startTime)
+
+	processCount := daemon.systemD.GetProcessCount()
+	if debugMode {
+		fmt.Println(colorAccent.Render("✓ Launch complete") + colorMuted.Render(fmt.Sprintf(" (%dms)", elapsed.Milliseconds())))
+		fmt.Println(colorMuted.Render(fmt.Sprintf("  Processes: %d", processCount)))
+		if pids, err := daemon.systemD.GetPIDs(); err == nil {
+			fmt.Println(colorMuted.Render(fmt.Sprintf("  PIDs: %v", pids)))
+		}
+	} else {
+		fmt.Println(colorAccent.Render("✓ Screensaver launched"))
+	}
+
+	fmt.Println()
+	fmt.Println(colorMuted.Render("Press Ctrl+C to stop"))
+	fmt.Println()
+
+	// Wait for interrupt signal
+	<-sigChan
+	fmt.Println()
+	fmt.Println(colorSecondary.Render("Stopping screensaver..."))
+	daemon.StopScreensaver()
+	daemon.Shutdown()
+	fmt.Println(colorAccent.Render("✓ Stopped"))
+}
+
+// showUsage displays usage information
+func showUsage() {
+	// Show ASCII art header
+	ascii := loadASCII()
+	fmt.Println()
+	fmt.Println(colorPrimary.Render(ascii))
+	fmt.Println()
+	fmt.Println(colorBold.Render("   TERMINAL SCREENSAVER DAEMON"))
+	fmt.Println()
+
+	fmt.Println(colorSecondary.Render("Usage:"))
+	fmt.Println("  sysc-walls-daemon [options]")
+	fmt.Println()
+
+	fmt.Println(colorSecondary.Render("Options:"))
+	fmt.Println("  " + colorAccent.Render("-start") + "              Start the daemon")
+	fmt.Println("  " + colorAccent.Render("-stop") + "               Stop the daemon")
+	fmt.Println("  " + colorAccent.Render("-test") + "               Test screensaver immediately")
+	fmt.Println("  " + colorAccent.Render("-test -debug") + "        Test with detailed diagnostics")
+	fmt.Println("  " + colorAccent.Render("-daemon") + "             Run as background daemon")
+	fmt.Println("  " + colorAccent.Render("-config") + " " + colorMuted.Render("<path>") + "      Path to config file")
+	fmt.Println("  " + colorAccent.Render("-debug") + "              Enable debug logging")
+	fmt.Println()
+
+	fmt.Println(colorSecondary.Render("Testing:"))
+	fmt.Println("  " + colorPrimary.Render("sysc-walls-daemon -test") + colorMuted.Render("              # Quick test"))
+	fmt.Println("  " + colorPrimary.Render("sysc-walls-daemon -test -debug") + colorMuted.Render("       # With diagnostics"))
+	fmt.Println()
+
+	fmt.Println(colorSecondary.Render("Service:"))
+	fmt.Println("  " + colorPrimary.Render("systemctl --user enable sysc-walls.service") + colorMuted.Render("   # Enable"))
+	fmt.Println("  " + colorPrimary.Render("systemctl --user start sysc-walls.service") + colorMuted.Render("    # Start"))
+	fmt.Println()
+
+	fmt.Println(colorSecondary.Render("Available Effects:"))
+	fmt.Println("  " + colorMuted.Render(strings.Join(config.AvailableEffects, ", ")))
+	fmt.Println()
+
+	fmt.Println(colorSecondary.Render("Available Themes:"))
+	fmt.Println("  " + colorMuted.Render(strings.Join(config.AvailableThemes, ", ")))
+	fmt.Println()
+
+	fmt.Println(colorMuted.Render("Config: ~/.config/sysc-walls/daemon.conf"))
+	fmt.Println(colorMuted.Render("Logs:   journalctl --user -u sysc-walls.service -f"))
+	fmt.Println()
 }

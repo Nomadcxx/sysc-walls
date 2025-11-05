@@ -624,10 +624,15 @@ func getProjectRoot() string {
 		return "."
 	}
 
-	// Go up from cmd/installer to project root
-	root := filepath.Dir(filepath.Dir(filepath.Dir(execPath)))
+	// The installer binary is typically built in the project root
+	// Check if go.mod exists in the same directory as the executable
+	execDir := filepath.Dir(execPath)
+	if _, err := os.Stat(filepath.Join(execDir, "go.mod")); err == nil {
+		return execDir
+	}
 
-	// Check if go.mod exists to verify this is the project root
+	// If built from cmd/installer/, go up from there to project root
+	root := filepath.Dir(filepath.Dir(filepath.Dir(execPath)))
 	if _, err := os.Stat(filepath.Join(root, "go.mod")); err == nil {
 		return root
 	}

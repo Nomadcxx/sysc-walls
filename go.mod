@@ -37,5 +37,4 @@ require (
 	gonum.org/v1/gonum v0.16.0 // indirect
 )
 
-// Temporarily disabled until sysc-Go directory is present
-// replace github.com/Nomadcxx/sysc-Go => ./sysc-Go
+replace github.com/Nomadcxx/sysc-Go => ./sysc-Go

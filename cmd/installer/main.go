@@ -338,7 +338,19 @@ func (m model) renderComplete() string {
 			b.WriteString("\n\n")
 			b.WriteString(lipgloss.NewStyle().Foreground(FgSecondary).Render("sysc-walls is now installed at /usr/local/bin"))
 			b.WriteString("\n\n")
-			b.WriteString(lipgloss.NewStyle().Foreground(FgSecondary).Render("To start the service:"))
+
+			// Test first section
+			b.WriteString(lipgloss.NewStyle().Foreground(Primary).Bold(true).Render("Test your installation:"))
+			b.WriteString("\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(Accent).Render("  sysc-walls-daemon -test"))
+			b.WriteString(lipgloss.NewStyle().Foreground(FgMuted).Render("              # Quick test"))
+			b.WriteString("\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(Accent).Render("  sysc-walls-daemon -test -debug"))
+			b.WriteString(lipgloss.NewStyle().Foreground(FgMuted).Render("       # Test with diagnostics"))
+			b.WriteString("\n\n")
+
+			// Then start service
+			b.WriteString(lipgloss.NewStyle().Foreground(Primary).Bold(true).Render("Start the service:"))
 			b.WriteString("\n")
 			b.WriteString(lipgloss.NewStyle().Foreground(Accent).Render("  systemctl --user enable sysc-walls.service"))
 			b.WriteString("\n")

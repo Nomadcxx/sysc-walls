@@ -141,28 +141,78 @@ func main() {
 
 	// Test mode - activate screensaver immediately
 	if *test {
-		fmt.Println("Test mode: Activating screensaver immediately...")
+		fmt.Println("=== SYSC-WALLS TEST MODE ===")
+		fmt.Println()
+
 		daemon.debug = true
+
+		// Show compositor info if debug enabled
+		if *debug {
+			fmt.Println("Detecting compositor...")
+			comp, err := compositor.DetectCompositor()
+			if err != nil {
+				fmt.Printf("⚠ Compositor detection failed: %v\n", err)
+				fmt.Println("  Will attempt single-monitor launch")
+			} else {
+				fmt.Printf("✓ Detected: %s\n", comp.Name())
+
+				// List outputs
+				if outputs, err := comp.ListOutputs(); err == nil {
+					fmt.Printf("\nFound %d output(s):\n", len(outputs))
+					for i, output := range outputs {
+						focusMarker := ""
+						if output.Focused {
+							focusMarker = " [focused]"
+						}
+						fmt.Printf("  %d. %s%s\n", i+1, output.Name, focusMarker)
+					}
+				}
+			}
+			fmt.Println()
+		}
+
+		fmt.Println("Launching screensaver...")
+		startTime := time.Now()
 		daemon.LaunchScreensaver()
-		fmt.Println("Screensaver activated in test mode. Press Ctrl+C to stop.")
+		elapsed := time.Since(startTime)
+
+		processCount := daemon.systemD.GetProcessCount()
+		if *debug {
+			fmt.Printf("✓ Launch complete in %dms\n", elapsed.Milliseconds())
+			fmt.Printf("  Processes launched: %d\n", processCount)
+			if pids, err := daemon.systemD.GetPIDs(); err == nil {
+				fmt.Printf("  PIDs: %v\n", pids)
+			}
+		} else {
+			fmt.Println("✓ Screensaver activated")
+		}
+
+		fmt.Println("\nPress Ctrl+C to stop")
 
 		// Wait for interrupt signal
 		<-c
-		fmt.Println("Test mode: Stopping screensaver...")
+		fmt.Println("\nStopping screensaver...")
 		daemon.StopScreensaver()
 		daemon.Shutdown()
+		fmt.Println("✓ Stopped")
 		return
 	}
 
 	// No command specified, print usage
 	fmt.Println("Usage: sysc-walls-daemon [options]")
+	fmt.Println()
 	fmt.Println("Options:")
-	fmt.Println("  -start              Start the daemon (requires sudo)")
-	fmt.Println("  -stop               Stop the daemon (requires sudo)")
+	fmt.Println("  -start              Start the daemon")
+	fmt.Println("  -stop               Stop the daemon")
 	fmt.Println("  -test               Test mode - activate screensaver immediately")
+	fmt.Println("  -test -debug        Test with detailed compositor/output info")
 	fmt.Println("  -daemon             Run as daemon (background)")
-	fmt.Println("  -config             Path to config file")
+	fmt.Println("  -config <path>      Path to config file")
 	fmt.Println("  -debug              Enable debug logging")
+	fmt.Println()
+	fmt.Println("Testing:")
+	fmt.Println("  sysc-walls-daemon -test              # Quick test")
+	fmt.Println("  sysc-walls-daemon -test -debug       # Test with diagnostics")
 	flag.PrintDefaults()
 }
 

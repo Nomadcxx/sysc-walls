@@ -432,12 +432,9 @@ func (c *Config) GetTerminalLauncher() string {
 func (c *Config) GetTerminalArgs() []string {
 	args := []string{}
 
-	// NOTE: Don't use --start-as=fullscreen for multi-monitor setups
-	// It causes niri to place windows on the originating output instead of
-	// the focused output. Launch normally, then fullscreen via niri action.
-	// if c.terminalFullscreen {
-	//     args = append(args, "--start-as=fullscreen")
-	// }
+	if c.terminalFullscreen {
+		args = append(args, "--start-as=fullscreen")
+	}
 
 	return args
 }

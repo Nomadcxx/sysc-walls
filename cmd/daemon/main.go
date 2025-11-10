@@ -315,6 +315,7 @@ func (d *Daemon) LaunchScreensaver() {
 	}
 
 	// Launch screensaver on each output using sequential focusing
+	// Use longer delays for better reliability across different compositors
 	for i, output := range outputs {
 		if d.debug {
 			log.Printf("Launching on output %d/%d: %s", i+1, len(outputs), output.Name)
@@ -326,8 +327,9 @@ func (d *Daemon) LaunchScreensaver() {
 			continue
 		}
 
-		// Small delay to ensure focus is applied
-		time.Sleep(100 * time.Millisecond)
+		// Longer delay to ensure compositor fully processes the focus change
+		// Some compositors need more time to settle before launching windows
+		time.Sleep(250 * time.Millisecond)
 
 		// Launch screensaver (window should follow focus)
 		if err := d.systemD.LaunchScreensaver(screensaverCmd, output.Name); err != nil {
@@ -335,15 +337,16 @@ func (d *Daemon) LaunchScreensaver() {
 			continue
 		}
 
-		// Delay between launches
+		// Longer delay between launches to ensure windows initialize properly
+		// This helps prevent race conditions with compositor window placement
 		if i < len(outputs)-1 {
-			time.Sleep(150 * time.Millisecond)
+			time.Sleep(300 * time.Millisecond)
 		}
 	}
 
-	// Give all windows time to fully initialize before restoring focus
-	// This ensures fullscreen windows are properly rendered on all outputs
-	time.Sleep(300 * time.Millisecond)
+	// Give all windows substantial time to fully initialize and become fullscreen
+	// This is critical for proper multi-monitor rendering in all compositors
+	time.Sleep(600 * time.Millisecond)
 
 	// Restore original focus
 	if originalFocus != "" {

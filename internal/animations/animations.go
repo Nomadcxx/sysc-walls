@@ -20,6 +20,12 @@ func CreateAnimation(effect string, width, height int, theme string) (Animation,
 	return CreateOptimizedAnimation(effect, width, height, theme)
 }
 
+// CreateAnimationWithText creates an animation with custom text content for text-based effects
+func CreateAnimationWithText(effect string, width, height int, theme string, text string) (Animation, error) {
+	// Use optimized implementation with text support
+	return CreateOptimizedAnimationWithText(effect, width, height, theme, text)
+}
+
 // Matrix animation using the sysc-Go library
 type MatrixAnimation struct {
 	command     string

@@ -14,15 +14,19 @@ import (
 // Available animation effects
 var AvailableEffects = []string{
 	"matrix",
+	"matrix-art",
 	"fire",
 	"fireworks",
 	"rain",
+	"rain-art",
 	"beams",
 	"beam-text",
 	"decrypt",
 	"pour",
 	"aquarium",
 	"print",
+	"blackhole",
+	"ring-text",
 }
 
 // Available color themes

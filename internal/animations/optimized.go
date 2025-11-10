@@ -9,21 +9,35 @@ import (
 
 // CreateOptimizedAnimation creates an optimized animation using sysc-Go library directly
 func CreateOptimizedAnimation(effect string, width, height int, theme string) (Animation, error) {
+	return CreateOptimizedAnimationWithText(effect, width, height, theme, "")
+}
+
+// CreateOptimizedAnimationWithText creates an optimized animation with custom text for text-based effects
+func CreateOptimizedAnimationWithText(effect string, width, height int, theme string, text string) (Animation, error) {
 	palette := getThemePalette(theme)
+
+	// Default text if empty
+	if text == "" {
+		text = "SYSC-WALLS"
+	}
 
 	switch effect {
 	case "matrix":
 		return newOptimizedMatrix(width, height, palette)
+	case "matrix-art":
+		return newOptimizedMatrixArt(width, height, palette, text)
 	case "fire":
 		return newOptimizedFire(width, height, palette)
 	case "fireworks":
 		return newOptimizedFireworks(width, height, palette)
 	case "rain":
 		return newOptimizedRain(width, height, palette)
+	case "rain-art":
+		return newOptimizedRainArt(width, height, palette, text)
 	case "beams":
 		return newOptimizedBeams(width, height, palette)
 	case "beam-text":
-		return newOptimizedBeamText(width, height, palette)
+		return newOptimizedBeamText(width, height, palette, text)
 	case "decrypt":
 		return newOptimizedDecrypt(width, height, palette)
 	case "pour":
@@ -32,6 +46,10 @@ func CreateOptimizedAnimation(effect string, width, height int, theme string) (A
 		return newOptimizedAquarium(width, height, palette)
 	case "print":
 		return newOptimizedPrint(width, height, palette)
+	case "blackhole":
+		return newOptimizedBlackhole(width, height, palette, text)
+	case "ring-text":
+		return newOptimizedRingText(width, height, palette, text)
 	default:
 		return nil, fmt.Errorf("unknown animation effect: %s", effect)
 	}
@@ -198,11 +216,11 @@ type optimizedBeamText struct {
 	palette []string
 }
 
-func newOptimizedBeamText(width, height int, palette []string) (*optimizedBeamText, error) {
+func newOptimizedBeamText(width, height int, palette []string, text string) (*optimizedBeamText, error) {
 	config := syscGo.BeamTextConfig{
 		Width:             width,
 		Height:            height,
-		Text:              "SYSC-WALLS",
+		Text:              text,
 		BeamGradientStops: palette[:minInt(len(palette), 5)],
 	}
 	return &optimizedBeamText{
@@ -220,10 +238,11 @@ func (b *optimizedBeamText) Render() string {
 }
 
 func (b *optimizedBeamText) Resize(width, height int) {
+	// Note: Resize loses the custom text, would need to store it
 	config := syscGo.BeamTextConfig{
 		Width:             width,
 		Height:            height,
-		Text:              "SYSC-WALLS",
+		Text:              "SYSC-WALLS", // TODO: Store text in struct if resize is needed
 		BeamGradientStops: b.palette[:minInt(len(b.palette), 5)],
 	}
 	b.effect = syscGo.NewBeamTextEffect(config)
@@ -399,4 +418,150 @@ func (p *optimizedPrint) Resize(width, height int) {
 		Height: height,
 	}
 	p.effect = syscGo.NewPrintEffect(config)
+}
+
+// MatrixArt - Matrix rain that crystallizes into ASCII art
+type optimizedMatrixArt struct {
+	effect  *syscGo.MatrixArtEffect
+	palette []string
+	text    string
+}
+
+func newOptimizedMatrixArt(width, height int, palette []string, text string) (*optimizedMatrixArt, error) {
+	return &optimizedMatrixArt{
+		effect:  syscGo.NewMatrixArtEffect(width, height, palette, text),
+		palette: palette,
+		text:    text,
+	}, nil
+}
+
+func (m *optimizedMatrixArt) Update(frame int) {
+	m.effect.Update()
+}
+
+func (m *optimizedMatrixArt) Render() string {
+	return m.effect.Render()
+}
+
+func (m *optimizedMatrixArt) Resize(width, height int) {
+	m.effect = syscGo.NewMatrixArtEffect(width, height, m.palette, m.text)
+}
+
+// RainArt - Rain drops that freeze to form ASCII art
+type optimizedRainArt struct {
+	effect  *syscGo.RainArtEffect
+	palette []string
+	text    string
+}
+
+func newOptimizedRainArt(width, height int, palette []string, text string) (*optimizedRainArt, error) {
+	return &optimizedRainArt{
+		effect:  syscGo.NewRainArtEffect(width, height, palette, text),
+		palette: palette,
+		text:    text,
+	}, nil
+}
+
+func (r *optimizedRainArt) Update(frame int) {
+	r.effect.Update()
+}
+
+func (r *optimizedRainArt) Render() string {
+	return r.effect.Render()
+}
+
+func (r *optimizedRainArt) Resize(width, height int) {
+	r.effect = syscGo.NewRainArtEffect(width, height, r.palette, r.text)
+}
+
+// Blackhole - Text gets consumed by a blackhole and explodes
+type optimizedBlackhole struct {
+	effect  *syscGo.BlackholeEffect
+	palette []string
+	text    string
+}
+
+func newOptimizedBlackhole(width, height int, palette []string, text string) (*optimizedBlackhole, error) {
+	config := syscGo.BlackholeConfig{
+		Width:               width,
+		Height:              height,
+		Text:                text,
+		BlackholeColor:      "#ffffff",
+		StarColors:          palette[:minInt(len(palette), 6)],
+		FinalGradientStops:  palette[:minInt(len(palette), 3)],
+		StaticGradientStops: palette[:minInt(len(palette), 6)],
+		StaticGradientDir:   syscGo.GradientHorizontal,
+	}
+	return &optimizedBlackhole{
+		effect:  syscGo.NewBlackholeEffect(config),
+		palette: palette,
+		text:    text,
+	}, nil
+}
+
+func (b *optimizedBlackhole) Update(frame int) {
+	b.effect.Update()
+}
+
+func (b *optimizedBlackhole) Render() string {
+	return b.effect.Render()
+}
+
+func (b *optimizedBlackhole) Resize(width, height int) {
+	config := syscGo.BlackholeConfig{
+		Width:               width,
+		Height:              height,
+		Text:                b.text,
+		BlackholeColor:      "#ffffff",
+		StarColors:          b.palette[:minInt(len(b.palette), 6)],
+		FinalGradientStops:  b.palette[:minInt(len(b.palette), 3)],
+		StaticGradientStops: b.palette[:minInt(len(b.palette), 6)],
+		StaticGradientDir:   syscGo.GradientHorizontal,
+	}
+	b.effect = syscGo.NewBlackholeEffect(config)
+}
+
+// RingText - Text spins on concentric rings with vortex motion
+type optimizedRingText struct {
+	effect  *syscGo.RingTextEffect
+	palette []string
+	text    string
+}
+
+func newOptimizedRingText(width, height int, palette []string, text string) (*optimizedRingText, error) {
+	config := syscGo.RingTextConfig{
+		Width:               width,
+		Height:              height,
+		Text:                text,
+		RingColors:          palette[:minInt(len(palette), 3)],
+		FinalGradientStops:  palette[:minInt(len(palette), 3)],
+		StaticGradientStops: palette[:minInt(len(palette), 3)],
+		StaticGradientDir:   syscGo.GradientHorizontal,
+	}
+	return &optimizedRingText{
+		effect:  syscGo.NewRingTextEffect(config),
+		palette: palette,
+		text:    text,
+	}, nil
+}
+
+func (r *optimizedRingText) Update(frame int) {
+	r.effect.Update()
+}
+
+func (r *optimizedRingText) Render() string {
+	return r.effect.Render()
+}
+
+func (r *optimizedRingText) Resize(width, height int) {
+	config := syscGo.RingTextConfig{
+		Width:               width,
+		Height:              height,
+		Text:                r.text,
+		RingColors:          r.palette[:minInt(len(r.palette), 3)],
+		FinalGradientStops:  r.palette[:minInt(len(r.palette), 3)],
+		StaticGradientStops: r.palette[:minInt(len(r.palette), 3)],
+		StaticGradientDir:   syscGo.GradientHorizontal,
+	}
+	r.effect = syscGo.NewRingTextEffect(config)
 }

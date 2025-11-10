@@ -12,8 +12,11 @@ import (
 	"time"
 
 	"github.com/Nomadcxx/sysc-walls/internal/animations"
+	"github.com/Nomadcxx/sysc-walls/internal/clock"
 	"github.com/Nomadcxx/sysc-walls/pkg/utils"
 )
+
+const version = "1.0.0"
 
 // loadTextContent loads text from a file with fallback to default SYSC.txt
 func loadTextContent(customPath string, debug bool) string {
@@ -54,7 +57,7 @@ func loadTextContent(customPath string, debug bool) string {
 }
 
 // isTextBasedEffect checks if an effect uses text content
-func isTextBasedEffect(effect string) bool {
+func isTextBasedEffect(effect string) bool{
 	textBasedEffects := map[string]bool{
 		"matrix-art": true,
 		"rain-art":   true,
@@ -65,18 +68,82 @@ func isTextBasedEffect(effect string) bool {
 	return textBasedEffects[effect]
 }
 
+// overlayDateTime overlays date-time on animation output
+func overlayDateTime(animOutput string, width, height int, isTextBased bool) string {
+	// Get datetime lines
+	datetimeLines := clock.RenderDateTime()
+
+	// Split animation output into lines
+	animLines := strings.Split(animOutput, "\n")
+
+	// Ensure we have enough lines
+	for len(animLines) < height {
+		animLines = append(animLines, strings.Repeat(" ", width))
+	}
+
+	if isTextBased {
+		// For text-based effects: append datetime below the animation
+		// Find the last non-empty line
+		lastNonEmpty := len(animLines) - 1
+		for lastNonEmpty >= 0 && strings.TrimSpace(animLines[lastNonEmpty]) == "" {
+			lastNonEmpty--
+		}
+
+		// Insert datetime starting a few lines below the text
+		startLine := lastNonEmpty + 3
+		if startLine >= len(animLines) {
+			startLine = len(animLines) - len(datetimeLines) - 1
+		}
+		if startLine < 0 {
+			startLine = 0
+		}
+
+		// Center and insert datetime lines
+		centeredDateTime := clock.CenterLines(datetimeLines, width)
+		for i, line := range centeredDateTime {
+			if startLine+i < len(animLines) {
+				animLines[startLine+i] = line
+			}
+		}
+	} else {
+		// For other effects: overlay at bottom center
+		// Calculate starting position (bottom of screen, centered)
+		startLine := height - len(datetimeLines) - 2
+		if startLine < 0 {
+			startLine = 0
+		}
+
+		// Center and overlay datetime lines
+		centeredDateTime := clock.CenterLines(datetimeLines, width)
+		for i, line := range centeredDateTime {
+			if startLine+i < len(animLines) {
+				animLines[startLine+i] = line
+			}
+		}
+	}
+
+	return strings.Join(animLines, "\n")
+}
+
 func main() {
 	// Parse command line flags
 	var (
 		effect     = flag.String("effect", "matrix", "Animation effect to display")
 		theme      = flag.String("theme", "dracula", "Color theme for animation")
-		duration   = flag.Int("duration", 0, "Duration in seconds (0 for infinite)")
+		file       = flag.String("file", "", "Text file for text-based effects")
+		datetime   = flag.Bool("datetime", false, "Show date and time overlay")
+		showVersion = flag.Bool("v", false, "Show version information")
 		debug      = flag.Bool("debug", false, "Enable debug logging")
 		noClear    = flag.Bool("no-clear", false, "Don't clear the screen before animation")
 		fullScreen = flag.Bool("fullscreen", false, "Run in fullscreen mode")
-		textFile   = flag.String("text-file", "", "Path to custom ASCII art text file (for text-based effects)")
 	)
 	flag.Parse()
+
+	// Handle version flag
+	if *showVersion {
+		fmt.Printf("sysc-walls-display version %s\n", version)
+		os.Exit(0)
+	}
 
 	// If fullscreen is requested, give terminal time to resize
 	if *fullScreen {
@@ -112,7 +179,7 @@ func main() {
 	// Load text content for text-based effects
 	var textContent string
 	if isTextBasedEffect(*effect) {
-		textContent = loadTextContent(*textFile, *debug)
+		textContent = loadTextContent(*file, *debug)
 	}
 
 	// Create animation based on effect
@@ -135,19 +202,19 @@ func main() {
 	ticker := time.NewTicker(50 * time.Millisecond) // 20 FPS
 	defer ticker.Stop()
 
-	// Determine animation duration
-	var totalFrames int
-	if *duration > 0 {
-		totalFrames = *duration * 20 // 20 FPS
-	} else {
-		totalFrames = -1 // Infinite
-	}
+	// Screensaver runs infinitely
+	totalFrames := -1
+
+	// Store values for use in goroutine
+	showDateTime := *datetime
+	effectName := *effect
+	isTextEffect := isTextBasedEffect(effectName)
 
 	if *debug {
 		fmt.Printf("Starting animation: %s with theme %s\n", *effect, *theme)
 		fmt.Printf("Terminal size: %dx%d\n", width, height)
-		fmt.Printf("Duration: %d frames (%s)\n", totalFrames,
-			map[bool]string{true: "infinite", false: fmt.Sprintf("%d seconds", *duration)}[!(*duration > 0)])
+		fmt.Printf("Duration: infinite (screensaver mode)\n")
+		fmt.Printf("DateTime overlay: %v\n", showDateTime)
 	}
 
 	// Animation goroutine
@@ -163,8 +230,16 @@ func main() {
 					utils.ClearScreen()
 				}
 
+				// Get rendered output
+				output := anim.Render()
+
+				// Apply datetime overlay if enabled
+				if showDateTime {
+					output = overlayDateTime(output, width, height, isTextEffect)
+				}
+
 				// Print animation
-				fmt.Print(anim.Render())
+				fmt.Print(output)
 
 				// Move cursor to top
 				fmt.Print("\033[H")

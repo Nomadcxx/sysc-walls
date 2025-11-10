@@ -6,12 +6,64 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/Nomadcxx/sysc-walls/internal/animations"
 	"github.com/Nomadcxx/sysc-walls/pkg/utils"
 )
+
+// loadTextContent loads text from a file with fallback to default SYSC.txt
+func loadTextContent(customPath string, debug bool) string {
+	// Try custom path first if provided
+	if customPath != "" {
+		if content, err := os.ReadFile(customPath); err == nil {
+			if debug {
+				fmt.Fprintf(os.Stderr, "Loaded text from: %s\n", customPath)
+			}
+			return strings.TrimSpace(string(content))
+		} else if debug {
+			fmt.Fprintf(os.Stderr, "Failed to load custom text file %s: %v\n", customPath, err)
+		}
+	}
+
+	// Try default SYSC.txt from sysc-Go/assets
+	defaultPaths := []string{
+		"sysc-Go/assets/SYSC.txt",
+		"../sysc-Go/assets/SYSC.txt",
+		"/usr/share/sysc-walls/SYSC.txt",
+		filepath.Join(os.Getenv("HOME"), ".local/share/sysc-walls/SYSC.txt"),
+	}
+
+	for _, path := range defaultPaths {
+		if content, err := os.ReadFile(path); err == nil {
+			if debug {
+				fmt.Fprintf(os.Stderr, "Loaded default text from: %s\n", path)
+			}
+			return strings.TrimSpace(string(content))
+		}
+	}
+
+	// Final fallback - simple text
+	if debug {
+		fmt.Fprintf(os.Stderr, "Using fallback text: SYSC-WALLS\n")
+	}
+	return "SYSC-WALLS"
+}
+
+// isTextBasedEffect checks if an effect uses text content
+func isTextBasedEffect(effect string) bool {
+	textBasedEffects := map[string]bool{
+		"matrix-art": true,
+		"rain-art":   true,
+		"blackhole":  true,
+		"ring-text":  true,
+		"beam-text":  true,
+	}
+	return textBasedEffects[effect]
+}
 
 func main() {
 	// Parse command line flags
@@ -22,6 +74,7 @@ func main() {
 		debug      = flag.Bool("debug", false, "Enable debug logging")
 		noClear    = flag.Bool("no-clear", false, "Don't clear the screen before animation")
 		fullScreen = flag.Bool("fullscreen", false, "Run in fullscreen mode")
+		textFile   = flag.String("text-file", "", "Path to custom ASCII art text file (for text-based effects)")
 	)
 	flag.Parse()
 
@@ -56,8 +109,14 @@ func main() {
 	}
 	defer utils.RestoreTerminal()
 
+	// Load text content for text-based effects
+	var textContent string
+	if isTextBasedEffect(*effect) {
+		textContent = loadTextContent(*textFile, *debug)
+	}
+
 	// Create animation based on effect
-	anim, err := animations.CreateAnimation(*effect, width, height, *theme)
+	anim, err := animations.CreateAnimationWithText(*effect, width, height, *theme, textContent)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating animation: %v\n", err)
 		os.Exit(1)

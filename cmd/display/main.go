@@ -149,7 +149,7 @@ func main() {
 	// If fullscreen is requested, give terminal time to resize
 	if *fullScreen {
 		// Give terminal time to fully enter fullscreen mode
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(300 * time.Millisecond)
 	}
 
 	// Get terminal dimensions AFTER possibly entering fullscreen
@@ -157,10 +157,10 @@ func main() {
 	if err != nil && *debug {
 		fmt.Fprintf(os.Stderr, "Error getting terminal size: %v\n", err)
 	}
-	
+
 	// Retry getting size a few times if it looks wrong
-	for i := 0; i < 5 && (width < 100 || height < 40); i++ {
-		time.Sleep(50 * time.Millisecond)
+	for i := 0; i < 10 && (width < 100 || height < 40); i++ {
+		time.Sleep(100 * time.Millisecond)
 		width, height, err = utils.GetTerminalSize()
 		if *debug {
 			fmt.Fprintf(os.Stderr, "Retry %d: size=%dx%d\n", i+1, width, height)

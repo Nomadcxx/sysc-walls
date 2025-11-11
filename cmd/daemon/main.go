@@ -66,6 +66,7 @@ func main() {
 		start       = flag.Bool("start", false, "Start the daemon")
 		stop        = flag.Bool("stop", false, "Stop the daemon")
 		test        = flag.Bool("test", false, "Test mode - activate screensaver immediately")
+		demo        = flag.Bool("demo", false, "Demo mode - cycle through all effects (30s each)")
 		debug       = flag.Bool("debug", false, "Enable debug logging")
 	)
 	flag.Parse()
@@ -154,6 +155,12 @@ func main() {
 	// Test mode - activate screensaver immediately
 	if *test {
 		showTestMode(daemon, *debug, c)
+		return
+	}
+
+	// Demo mode - cycle through all effects
+	if *demo {
+		showDemoMode(daemon, *debug, c)
 		return
 	}
 
@@ -531,6 +538,125 @@ func showTestMode(daemon *Daemon, debugMode bool, sigChan chan os.Signal) {
 	fmt.Println(colorAccent.Render("✓ Stopped"))
 }
 
+// showDemoMode cycles through all effects for recording showcase
+func showDemoMode(daemon *Daemon, debugMode bool, sigChan chan os.Signal) {
+	// Show ASCII art header
+	ascii := loadASCII()
+	fmt.Println()
+	fmt.Println(colorPrimary.Render(ascii))
+	fmt.Println()
+	fmt.Println(colorBold.Render("        DEMO MODE"))
+	fmt.Println()
+
+	daemon.debug = debugMode
+
+	// Define demo effect order (matrix-art and rain-art first, then rest)
+	demoEffects := []string{
+		"matrix-art",
+		"rain-art",
+		"fire",
+		"fireworks",
+		"matrix",
+		"rain",
+		"beams",
+		"beam-text",
+		"decrypt",
+		"pour",
+		"aquarium",
+		"print",
+		"ring-text",
+		"blackhole",
+	}
+
+	effectDuration := 30 * time.Second
+	theme := daemon.config.GetAnimationTheme()
+
+	fmt.Println(colorSecondary.Render("Demo Configuration:"))
+	fmt.Println(fmt.Sprintf("  Effects: %d total", len(demoEffects)))
+	fmt.Println(fmt.Sprintf("  Duration: %v per effect", effectDuration))
+	fmt.Println(fmt.Sprintf("  Theme: %s", theme))
+	fmt.Println(fmt.Sprintf("  Total runtime: ~%v", time.Duration(len(demoEffects))*effectDuration))
+	fmt.Println()
+	fmt.Println(colorMuted.Render("Note: Demo runs on single monitor only, input detection disabled"))
+	fmt.Println(colorMuted.Render("Press Ctrl+C to stop at any time"))
+	fmt.Println()
+
+	// Store original effect
+	originalEffect := daemon.config.GetAnimationEffect()
+
+	// Cycle through effects
+	for i, effect := range demoEffects {
+		// Check for interrupt
+		select {
+		case <-sigChan:
+			fmt.Println()
+			fmt.Println(colorSecondary.Render("Demo interrupted"))
+			daemon.config.SetAnimationEffect(originalEffect)
+			daemon.Shutdown()
+			return
+		default:
+		}
+
+		fmt.Println(colorPrimary.Render(fmt.Sprintf("[%d/%d] %s", i+1, len(demoEffects), effect)))
+
+		// Set current effect
+		daemon.config.SetAnimationEffect(effect)
+
+		// Build command for single monitor launch (no multi-monitor detection)
+		terminal := daemon.config.GetTerminalLauncher()
+		args := daemon.config.GetTerminalArgs()
+		cmdParts := []string{terminal}
+		cmdParts = append(cmdParts, args...)
+		cmdParts = append(cmdParts, "--class", "sysc-walls-screensaver")
+		cmdParts = append(cmdParts, "/usr/local/bin/sysc-walls-display", "--effect", effect, "--theme", theme, "--fullscreen")
+
+		screensaverCmd := strings.Join(cmdParts, " ")
+
+		if debugMode {
+			fmt.Println(colorMuted.Render("  Command: " + screensaverCmd))
+		}
+
+		// Launch on single monitor only
+		if err := daemon.systemD.LaunchScreensaver(screensaverCmd, "demo"); err != nil {
+			fmt.Println(colorError.Render(fmt.Sprintf("  ✗ Failed to launch: %v", err)))
+			continue
+		}
+
+		if debugMode {
+			if pids, err := daemon.systemD.GetPIDs(); err == nil {
+				fmt.Println(colorMuted.Render(fmt.Sprintf("  PID: %v", pids)))
+			}
+		}
+
+		// Wait for duration or interrupt
+		timer := time.NewTimer(effectDuration)
+		select {
+		case <-timer.C:
+			// Duration elapsed, stop and continue to next
+			daemon.StopScreensaver()
+			if i < len(demoEffects)-1 {
+				time.Sleep(500 * time.Millisecond) // Brief pause between effects
+			}
+		case <-sigChan:
+			timer.Stop()
+			daemon.StopScreensaver()
+			fmt.Println()
+			fmt.Println(colorSecondary.Render("Demo interrupted"))
+			daemon.config.SetAnimationEffect(originalEffect)
+			daemon.Shutdown()
+			return
+		}
+	}
+
+	// Restore original effect
+	daemon.config.SetAnimationEffect(originalEffect)
+
+	fmt.Println()
+	fmt.Println(colorAccent.Render("✓ Demo complete"))
+	fmt.Println()
+	daemon.Shutdown()
+}
+
 // showUsage displays usage information
 func showUsage() {
 	// Show ASCII art header
@@ -550,6 +676,8 @@ func showUsage() {
 	fmt.Println("  " + colorAccent.Render("-stop") + "               Stop the daemon")
 	fmt.Println("  " + colorAccent.Render("-test") + "               Test screensaver immediately")
 	fmt.Println("  " + colorAccent.Render("-test -debug") + "        Test with detailed diagnostics")
+	fmt.Println("  " + colorAccent.Render("-demo") + "               Cycle through all effects (30s each)")
+	fmt.Println("  " + colorAccent.Render("-demo -debug") + "        Demo with command output")
 	fmt.Println("  " + colorAccent.Render("-daemon") + "             Run as background daemon")
 	fmt.Println("  " + colorAccent.Render("-config") + " " + colorMuted.Render("<path>") + "      Path to config file")
 	fmt.Println("  " + colorAccent.Render("-debug") + "              Enable debug logging")
@@ -558,6 +686,7 @@ func showUsage() {
 	fmt.Println(colorSecondary.Render("Testing:"))
 	fmt.Println("  " + colorPrimary.Render("sysc-walls-daemon -test") + colorMuted.Render("              # Quick test"))
 	fmt.Println("  " + colorPrimary.Render("sysc-walls-daemon -test -debug") + colorMuted.Render("       # With diagnostics"))
+	fmt.Println("  " + colorPrimary.Render("sysc-walls-daemon -demo") + colorMuted.Render("              # Showcase all effects"))
 	fmt.Println()
 
 	fmt.Println(colorSecondary.Render("Service:"))

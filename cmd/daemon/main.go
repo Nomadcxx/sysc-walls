@@ -550,20 +550,22 @@ func showDemoMode(daemon *Daemon, debugMode bool, sigChan chan os.Signal) {
 
 	daemon.debug = debugMode
 
-	// Define demo effect order (matrix-art and rain-art first, then rest)
+	// Define demo effect order (text-based effects first, then non-text effects)
 	// Note: decrypt, pour, and print are not yet implemented in sysc-Go
 	demoEffects := []string{
+		// Text-based effects
 		"matrix-art",
+		"ring-text",
 		"rain-art",
-		"fire",
-		"fireworks",
+		"blackhole",
+		"beam-text",
+		// Non-text effects
 		"matrix",
 		"rain",
+		"fire",
+		"fireworks",
 		"beams",
-		"beam-text",
 		"aquarium",
-		"ring-text",
-		"blackhole",
 	}
 
 	effectDuration := 30 * time.Second

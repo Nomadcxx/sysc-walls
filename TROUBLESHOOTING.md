@@ -30,6 +30,149 @@ The installer copies all ASCII art files from sysc-Go to this directory. Text-ba
 - `SYSC2.txt` - Alternative SYSC design
 - `SYSC3.txt` - Another SYSC variant
 
+## Creating Custom ASCII Art
+
+Text-based effects like `matrix-art`, `rain-art`, and `blackhole` can display custom ASCII art. You can create your own art using the sysc-Go TUI tool or manually.
+
+### Using the sysc-Go ASCII Creator TUI
+
+The sysc-Go library includes an interactive TUI for creating and previewing ASCII art:
+
+**Build the TUI:**
+```bash
+cd sysc-walls/sysc-Go
+go build -o syscgo-tui ./cmd/syscgo-tui/
+./syscgo-tui
+```
+
+**TUI Features:**
+- **Live preview** - See your ASCII art with matrix-art, rain-art, or other text effects in real-time
+- **Theme selection** - Test different color palettes
+- **Animation preview** - Watch how the effect animates with your text
+- **Built-in editor** - Create ASCII art directly in the terminal
+- **File browser** - Load existing .txt files from assets directory
+- **Export options** - Save to sysc-Go assets or sysc-walls config directory
+
+**Workflow:**
+
+1. **Start the TUI:**
+   ```bash
+   ./syscgo-tui
+   ```
+
+2. **Choose creation method:**
+   - Select "Custom text" to open the built-in editor
+   - Or select an existing .txt file as a starting point
+
+3. **Create your ASCII art:**
+   - Type or paste ASCII art in the editor
+   - Use the preview pane to see it animated in real-time
+   - Test different effects (matrix-art, rain-art) and themes
+
+4. **Save your creation:**
+   - Press the export key (shown in help bar)
+   - Choose export target:
+     - **sysc-Go assets** - Saves to `sysc-Go/assets/` (for development)
+     - **sysc-walls config** - Saves to `~/.config/sysc-walls/ascii/` (for immediate use)
+   - Enter a filename (e.g., `myart.txt`)
+
+5. **Use your ASCII art:**
+   - If exported to sysc-walls config, it's ready to use
+   - Reinstall sysc-walls to pick up the new file:
+     ```bash
+     cd sysc-walls
+     go run cmd/installer/main.go
+     ```
+
+### Manual ASCII Art Creation
+
+You can also create ASCII art manually using any text editor:
+
+**Tips for good ASCII art:**
+
+1. **Use block characters** for solid areas:
+   ```
+   █ ▓ ▒ ░ ▄ ▀ ▌ ▐
+   ```
+
+2. **Keep it proportional** - Terminal characters are taller than they are wide (roughly 2:1)
+
+3. **Test readability** - View it in your terminal at full screen to ensure it looks good
+
+4. **Size considerations:**
+   - Recommended width: 80-120 characters
+   - Recommended height: 15-30 lines
+   - Too large and it won't fit on smaller screens
+   - Too small and the effect won't be as dramatic
+
+5. **Character density:**
+   - Matrix-art works best with solid blocks of text
+   - Leave some spacing for the "crystallization" effect to show
+
+**Example ASCII art structure:**
+```
+████████████████  ████  ████  ████████████████
+████        ████  ████  ████  ████        ████
+████████████████  ████  ████  ████████████████
+▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  ▒▒▒▒  ▒▒▒▒  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+```
+
+### Using Custom ASCII Art with Effects
+
+Once you have your ASCII art file in `~/.config/sysc-walls/ascii/`:
+
+**For manual testing:**
+```bash
+# Test with matrix-art
+/usr/local/bin/sysc-walls-display --effect matrix-art --theme rama --text-file ~/.config/sysc-walls/ascii/myart.txt
+
+# Test with rain-art
+/usr/local/bin/sysc-walls-display --effect rain-art --theme dracula --text-file ~/.config/sysc-walls/ascii/myart.txt
+
+# Test with blackhole
+/usr/local/bin/sysc-walls-display --effect blackhole --theme nord --text-file ~/.config/sysc-walls/ascii/myart.txt
+```
+
+**For use with the daemon:**
+
+The daemon currently uses `SYSC.txt` by default for all text-based effects. To use a different file:
+
+1. Rename your file to `SYSC.txt`:
+   ```bash
+   mv ~/.config/sysc-walls/ascii/myart.txt ~/.config/sysc-walls/ascii/SYSC.txt
+   ```
+
+2. Or keep the original and create a symlink:
+   ```bash
+   ln -sf ~/.config/sysc-walls/ascii/myart.txt ~/.config/sysc-walls/ascii/SYSC.txt
+   ```
+
+3. Restart the daemon:
+   ```bash
+   systemctl --user restart sysc-walls.service
+   ```
+
+### ASCII Art Resources
+
+**Online generators:**
+- [patorjk.com](https://patorjk.com/software/taag/) - Text to ASCII Art Generator
+- [ascii-art-generator.org](https://ascii-art-generator.org/) - Image to ASCII converter
+
+**Creating from images:**
+
+1. Use an online converter or tool like `jp2a`:
+   ```bash
+   # Install jp2a
+   sudo pacman -S jp2a  # Arch
+   sudo apt install jp2a  # Debian/Ubuntu
+
+   # Convert image to ASCII
+   jp2a --width=80 --height=20 image.png > myart.txt
+   ```
+
+2. Edit the output to refine it
+3. Save to `~/.config/sysc-walls/ascii/`
+
 ### Config Options
 
 ```ini

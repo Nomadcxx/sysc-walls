@@ -225,10 +225,10 @@ type optimizedBeamText struct {
 
 func newOptimizedBeamText(width, height int, palette []string, text string) (*optimizedBeamText, error) {
 	config := syscGo.BeamTextConfig{
-		Width:             0, // Not used when Auto=true
-		Height:            0, // Not used when Auto=true
+		Width:             width,  // Full terminal width
+		Height:            height, // Full terminal height
 		Text:              text,
-		Auto:              true, // Auto-size to text dimensions
+		Auto:              false, // Fullscreen mode with internal centering
 		BeamGradientStops: palette[:minInt(len(palette), 5)],
 	}
 	return &optimizedBeamText{
@@ -245,21 +245,18 @@ func (b *optimizedBeamText) Update(frame int) {
 }
 
 func (b *optimizedBeamText) Render() string {
-	// Get the effect output (auto-sized to text)
-	output := b.effect.Render()
-
-	// Center it in the terminal
-	return centerOutput(output, b.termWidth, b.termHeight)
+	// Render fullscreen - sysc-Go handles centering internally
+	return b.effect.Render()
 }
 
 func (b *optimizedBeamText) Resize(width, height int) {
 	b.termWidth = width
 	b.termHeight = height
 	config := syscGo.BeamTextConfig{
-		Width:             0,
-		Height:            0,
+		Width:             width,
+		Height:            height,
 		Text:              b.text,
-		Auto:              true,
+		Auto:              false, // Fullscreen mode
 		BeamGradientStops: b.palette[:minInt(len(b.palette), 5)],
 	}
 	b.effect = syscGo.NewBeamTextEffect(config)

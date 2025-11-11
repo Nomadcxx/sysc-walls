@@ -620,11 +620,13 @@ func centerOutput(output string, termWidth, termHeight int) string {
 		verticalOffset = 0
 	}
 
-	// Find max line width (stripping ANSI codes for accurate width)
+	// Find max line width (stripping ANSI codes AND trailing spaces for accurate width)
 	maxWidth := 0
 	for _, line := range lines {
-		// Strip ANSI codes to get actual visual width
+		// Strip ANSI codes to get actual visual content
 		visualLine := stripAnsiCodes(line)
+		// Trim trailing spaces to get real content width
+		visualLine = strings.TrimRight(visualLine, " ")
 		visualWidth := len([]rune(visualLine))
 		if visualWidth > maxWidth {
 			maxWidth = visualWidth

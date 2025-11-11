@@ -39,7 +39,10 @@ var AvailableThemes = []string{
 	"material",
 	"solarized",
 	"monochrome",
-	"transishardjob",
+	"trainsishardjob",
+	"rama",
+	"eldritch",
+	"dark",
 }
 
 // Config represents the daemon configuration
@@ -60,9 +63,9 @@ func NewConfig() *Config {
 		idleTimeout:        300 * time.Second, // 5 minutes default
 		minDuration:        30 * time.Second,  // 30 seconds default
 		debug:              false,
-		animationEffect:    "matrix",
-		animationTheme:     "nord",
-		cycleAnimations:    true,
+		animationEffect:    "matrix-art",
+		animationTheme:     "rama",
+		cycleAnimations:    false,
 		terminalKitty:      true,
 		terminalFullscreen: true,
 	}

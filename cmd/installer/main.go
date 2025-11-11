@@ -185,7 +185,9 @@ func (m *model) initTasks() {
 			{name: "Clone sysc-Go", description: "Cloning sysc-Go animation library", execute: cloneSyscGo, status: statusPending},
 			{name: "Build binaries", description: "Building sysc-walls components", execute: buildBinaries, status: statusPending},
 			{name: "Install binaries", description: "Installing to /usr/local/bin", execute: installBinaries, status: statusPending},
+			{name: "Update config", description: "Updating daemon configuration", execute: updateConfig, status: statusPending},
 			{name: "Install systemd service", description: "Installing systemd service", execute: installSystemdService, status: statusPending},
+			{name: "Import environment", description: "Importing Wayland environment for systemd", execute: importWaylandEnvironment, status: statusPending},
 			{name: "Enable systemd service", description: "Enabling systemd service", execute: enableSystemdService, status: statusPending, optional: true},
 		}
 	}
@@ -487,6 +489,83 @@ func installBinaries(m *model) error {
 			return fmt.Errorf("failed to install binary %s: %v", component, err)
 		}
 	}
+
+	return nil
+}
+
+func updateConfig(m *model) error {
+	// Get the actual user's home directory (not root when using sudo)
+	homeDir := os.Getenv("HOME")
+	sudoUser := os.Getenv("SUDO_USER")
+	if sudoUser != "" {
+		homeDir = "/home/" + sudoUser
+	}
+
+	// Config file path
+	configDir := filepath.Join(homeDir, ".config", "sysc-walls")
+	configPath := filepath.Join(configDir, "daemon.conf")
+
+	// Create config directory if it doesn't exist
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %v", err)
+	}
+
+	// Default config content with new defaults
+	defaultConfig := `# sysc-walls daemon configuration
+
+[idle]
+timeout = 5m
+min_duration = 30s
+
+[daemon]
+debug = false
+
+[animation]
+effect = matrix-art
+theme = rama
+cycle = false
+
+[terminal]
+kitty = true
+fullscreen = true
+`
+
+	// Check if config file exists
+	if _, err := os.Stat(configPath); err == nil {
+		// Config exists, back it up
+		backupPath := configPath + ".backup"
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			return fmt.Errorf("failed to read existing config: %v", err)
+		}
+
+		if err := os.WriteFile(backupPath, data, 0644); err != nil {
+			return fmt.Errorf("failed to create backup: %v", err)
+		}
+	}
+
+	// Write new config (overwrite existing)
+	if err := os.WriteFile(configPath, []byte(defaultConfig), 0644); err != nil {
+		return fmt.Errorf("failed to write config: %v", err)
+	}
+
+	return nil
+}
+
+func importWaylandEnvironment(m *model) error {
+	sudoUser := os.Getenv("SUDO_USER")
+
+	// Import WAYLAND_DISPLAY for systemd user services
+	// This is critical for compositor detection to work
+	cmd := exec.Command("systemctl", "--user", "import-environment", "WAYLAND_DISPLAY")
+	if sudoUser != "" {
+		// Run as the actual user, not root
+		cmd = exec.Command("sudo", "-u", sudoUser, "systemctl", "--user", "import-environment", "WAYLAND_DISPLAY")
+	}
+
+	// Run the command, but don't fail if it doesn't work
+	// (user might be on X11 or environment might be set already)
+	cmd.Run()
 
 	return nil
 }

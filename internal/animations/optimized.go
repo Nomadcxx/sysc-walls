@@ -65,14 +65,17 @@ func getThemePalette(theme string) []string {
 		"catppuccin":     {"#1e1e2e", "#181825", "#313244", "#45475a", "#585b70", "#cdd6f4", "#f5e0dc", "#f2cdcd", "#f5c2e7", "#cba6f7", "#f38ba8", "#eba0ac", "#fab387", "#f9e2af", "#a6e3a1", "#94e2d5", "#89dceb", "#74c7ec", "#89b4fa", "#b4befe"},
 		"material":       {"#263238", "#2e3c43", "#314549", "#37474f", "#607d8b", "#546e7a", "#b0bec5", "#80cbc4", "#4dd0e1", "#4fc3f7", "#29b6f6", "#039be5", "#0288d1", "#0277bd", "#01579b"},
 		"solarized":      {"#002b36", "#073642", "#586e75", "#657b83", "#839496", "#93a1a1", "#eee8d5", "#fdf6e3", "#b58900", "#cb4b16", "#dc322f", "#d33682", "#6c71c4", "#268bd2", "#2aa198", "#859900"},
-		"monochrome":     {"#000000", "#1a1a1a", "#333333", "#4d4d4d", "#666666", "#808080", "#999999", "#b3b3b3", "#cccccc", "#e6e6e6", "#ffffff"},
-		"transishardjob": {"#000000", "#ff00ff", "#00ffff", "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ffffff"},
+		"monochrome":      {"#000000", "#1a1a1a", "#333333", "#4d4d4d", "#666666", "#808080", "#999999", "#b3b3b3", "#cccccc", "#e6e6e6", "#ffffff"},
+		"trainsishardjob": {"#000000", "#ff00ff", "#00ffff", "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ffffff"},
+		"rama":            {"#2b2d42", "#8d99ae", "#d90429", "#ef233c", "#edf2f4", "#ef233c", "#d90429", "#8d99ae", "#edf2f4"},
+		"eldritch":       {"#212337", "#292e42", "#7081d0", "#04d1f9", "#37f499", "#f16c75", "#a48cf2", "#f265b5", "#f7c67f", "#ebfafa"},
+		"dark":           {"#000000", "#1a1a1a", "#333333", "#4d4d4d", "#666666", "#808080", "#999999", "#b3b3b3", "#cccccc", "#e6e6e6", "#ffffff"},
 	}
 
 	if palette, ok := palettes[theme]; ok {
 		return palette
 	}
-	return palettes["nord"] // Default to nord
+	return palettes["rama"] // Default to rama
 }
 
 // Helper function

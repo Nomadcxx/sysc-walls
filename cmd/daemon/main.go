@@ -551,6 +551,7 @@ func showDemoMode(daemon *Daemon, debugMode bool, sigChan chan os.Signal) {
 	daemon.debug = debugMode
 
 	// Define demo effect order (matrix-art and rain-art first, then rest)
+	// Note: decrypt, pour, and print are not yet implemented in sysc-Go
 	demoEffects := []string{
 		"matrix-art",
 		"rain-art",
@@ -560,10 +561,7 @@ func showDemoMode(daemon *Daemon, debugMode bool, sigChan chan os.Signal) {
 		"rain",
 		"beams",
 		"beam-text",
-		"decrypt",
-		"pour",
 		"aquarium",
-		"print",
 		"ring-text",
 		"blackhole",
 	}

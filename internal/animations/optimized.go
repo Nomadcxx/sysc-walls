@@ -583,6 +583,29 @@ func (r *optimizedRingText) Resize(width, height int) {
 	r.effect = syscGo.NewRingTextEffect(config)
 }
 
+// stripAnsiCodes removes ANSI escape codes from a string for width calculation
+func stripAnsiCodes(s string) string {
+	// Simple state machine to strip ANSI codes
+	var result strings.Builder
+	inEscape := false
+
+	for _, r := range s {
+		if r == '\x1b' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if r == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+		result.WriteRune(r)
+	}
+
+	return result.String()
+}
+
 // centerOutput centers smaller animation output in a larger terminal
 func centerOutput(output string, termWidth, termHeight int) string {
 	lines := strings.Split(output, "\n")
@@ -597,11 +620,12 @@ func centerOutput(output string, termWidth, termHeight int) string {
 		verticalOffset = 0
 	}
 
-	// Find max line width (ignoring ANSI codes for width calculation)
+	// Find max line width (stripping ANSI codes for accurate width)
 	maxWidth := 0
 	for _, line := range lines {
-		// Simple width calculation - could be improved to strip ANSI
-		visualWidth := len([]rune(line))
+		// Strip ANSI codes to get actual visual width
+		visualLine := stripAnsiCodes(line)
+		visualWidth := len([]rune(visualLine))
 		if visualWidth > maxWidth {
 			maxWidth = visualWidth
 		}

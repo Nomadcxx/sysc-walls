@@ -78,7 +78,7 @@ fullscreen = true     # Launch fullscreen
 ```
 
 **Available effects:**
-`matrix`, `matrix-art`, `fire`, `fireworks`, `rain`, `rain-art`, `beams`, `beam-text`, `decrypt`, `pour`, `aquarium`, `print`, `ring-text`, `blackhole`
+`matrix`, `matrix-art`, `fire`, `fireworks`, `rain`, `rain-art`, `beams`, `beam-text`, `aquarium`, `ring-text`, `blackhole`
 
 **Available themes:**
 `rama`, `nord`, `dracula`, `gruvbox`, `tokyo-night`, `catppuccin`, `material`, `solarized`, `monochrome`, `eldritch`, `dark`, `trainsishardjob`

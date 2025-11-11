@@ -32,18 +32,19 @@ func loadTextContent(customPath string, debug bool) string {
 		}
 	}
 
-	// Try default SYSC.txt from sysc-Go/assets
+	// Try default SYSC.txt from config directory (primary location)
+	homeDir := os.Getenv("HOME")
 	defaultPaths := []string{
-		"sysc-Go/assets/SYSC.txt",
-		"../sysc-Go/assets/SYSC.txt",
+		filepath.Join(homeDir, ".config", "sysc-walls", "ascii", "SYSC.txt"),
+		filepath.Join(homeDir, ".local", "share", "sysc-walls", "SYSC.txt"),
 		"/usr/share/sysc-walls/SYSC.txt",
-		filepath.Join(os.Getenv("HOME"), ".local/share/sysc-walls/SYSC.txt"),
+		"sysc-Go/assets/SYSC.txt", // For development
 	}
 
 	for _, path := range defaultPaths {
 		if content, err := os.ReadFile(path); err == nil {
 			if debug {
-				fmt.Fprintf(os.Stderr, "Loaded default text from: %s\n", path)
+				fmt.Fprintf(os.Stderr, "Loaded ASCII art from: %s\n", path)
 			}
 			return strings.TrimSpace(string(content))
 		}
@@ -51,7 +52,7 @@ func loadTextContent(customPath string, debug bool) string {
 
 	// Final fallback - simple text
 	if debug {
-		fmt.Fprintf(os.Stderr, "Using fallback text: SYSC-WALLS\n")
+		fmt.Fprintf(os.Stderr, "Warning: No ASCII art files found, using fallback text\n")
 	}
 	return "SYSC-WALLS"
 }

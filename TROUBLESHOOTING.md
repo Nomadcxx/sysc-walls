@@ -10,6 +10,26 @@ This guide covers common issues, configuration options, and debugging steps for 
 
 The installer automatically creates/updates this file with current defaults. A backup is saved to `daemon.conf.backup` when updating.
 
+### ASCII Art Directory
+
+`~/.config/sysc-walls/ascii/`
+
+The installer copies all ASCII art files from sysc-Go to this directory. Text-based effects like `matrix-art` and `rain-art` automatically load `SYSC.txt` from here.
+
+**Adding custom ASCII art:**
+
+1. Create or download your ASCII art file (plain text)
+2. Save it to `~/.config/sysc-walls/ascii/myart.txt`
+3. Use it with the `--text-file` flag:
+   ```bash
+   /usr/local/bin/sysc-walls-display --effect matrix-art --theme rama --text-file ~/.config/sysc-walls/ascii/myart.txt
+   ```
+
+**Available ASCII art files:**
+- `SYSC.txt` - Default SYSC logo (used automatically)
+- `SYSC2.txt` - Alternative SYSC design
+- `SYSC3.txt` - Another SYSC variant
+
 ### Config Options
 
 ```ini
@@ -68,6 +88,11 @@ fullscreen = true     # Launch in fullscreen mode
 - `/usr/local/bin/sysc-walls-daemon` - Main idle detection daemon
 - `/usr/local/bin/sysc-walls-display` - Animation renderer
 - `/usr/local/bin/sysc-walls-client` - CLI management tool
+
+### Configuration & Data
+- `~/.config/sysc-walls/daemon.conf` - Main configuration file
+- `~/.config/sysc-walls/daemon.conf.backup` - Backup created by installer
+- `~/.config/sysc-walls/ascii/` - ASCII art files for text-based effects
 
 ### Service
 - `~/.config/systemd/user/sysc-walls.service` - systemd user service

@@ -137,56 +137,21 @@ sudo dnf install golang wayland-devel kitty
 
 ## Architecture
 
-sysc-walls consists of three components working together:
+Three components:
 
 ### 1. Daemon ([cmd/daemon/](cmd/daemon/))
 
-The core idle detection service that runs continuously via systemd.
-
-**Key responsibilities:**
-- Monitors system idle time using Wayland protocols (or X11 fallback)
-- Detects your compositor (Niri, Hyprland, Sway) for multi-monitor support
-- Launches screensaver instances on all connected displays
-- Terminates screensaver on keyboard/mouse activity
-
-**Idle detection** ([pkg/idle/](pkg/idle/))
-Uses [CGO bindings to libwayland-client](pkg/idle/) following the same approach as swayidle. This provides native integration with the `ext-idle-notify-v1` Wayland protocol for reliable idle detection across compositors. For X11 systems, falls back to `xprintidle`.
-
-**Multi-monitor support** ([internal/compositor/](internal/compositor/))
-Automatically detects your compositor and enumerates all displays. For each monitor, it focuses the output and launches a screensaver instance, ensuring wall-to-wall coverage across your entire setup.
+Systemd service that monitors idle time via Wayland's `ext-idle-notify-v1` protocol (X11 via xprintidle). Detects compositor (Niri/Hyprland/Sway), launches screensaver on all monitors, kills on activity. See [pkg/idle/](pkg/idle/) for CGO bindings and [internal/compositor/](internal/compositor/) for multi-monitor logic.
 
 ### 2. Display ([cmd/display/](cmd/display/))
 
-The animation renderer that runs in fullscreen Kitty terminal instances.
-
-**Key responsibilities:**
-- Renders animations from [sysc-Go](https://github.com/Nomadcxx/sysc-Go)
-- Handles terminal sizing and fullscreen mode
-- Applies color themes from configuration
-- Supports text-based effects with ASCII art loading
-
-**Animation integration** ([internal/animations/](internal/animations/))
-Wraps sysc-Go effects with optimized rendering for terminal output. Implements text loading from `sysc-Go/assets/` for crystallization effects like matrix-art and rain-art.
+Renders [sysc-Go](https://github.com/Nomadcxx/sysc-Go) animations in fullscreen Kitty terminals. Wraps effects with terminal sizing, theme application, and ASCII art loading. See [internal/animations/](internal/animations/).
 
 ### 3. Client ([cmd/client/](cmd/client/))
 
-Optional CLI tool for managing the daemon and testing configurations.
+Optional CLI for testing. Not needed for normal operation.
 
-**Not required for normal operation** - the daemon runs autonomously once started. Useful for quick tests and config validation.
-
-### Configuration ([internal/config/](internal/config/))
-
-Manages all settings from `~/.config/sysc-walls/daemon.conf`. Validates effects, themes, and timeouts. The installer updates this file on each run (with automatic backup to `daemon.conf.backup`).
-
-### Build System
-
-The project uses Go modules with a local `replace` directive for sysc-Go during development:
-
-```go
-replace github.com/Nomadcxx/sysc-Go => ./sysc-Go
-```
-
-The installer automatically clones sysc-Go to maintain this structure. For production releases, this will be replaced with a versioned GitHub module reference.
+Config lives in `~/.config/sysc-walls/daemon.conf` (see [internal/config/](internal/config/)). Build uses local sysc-Go clone via `replace` directive - will switch to GitHub module for releases.
 
 ## Testing & Debugging
 

@@ -3,6 +3,7 @@ package animations
 
 import (
 	"fmt"
+	"strings"
 
 	syscGo "github.com/Nomadcxx/sysc-Go/animations"
 )
@@ -213,22 +214,29 @@ func (b *optimizedBeams) Resize(width, height int) {
 	b.effect = syscGo.NewBeamsEffect(config)
 }
 
-// BeamText - uses config struct
+// BeamText - uses config struct with auto-sizing and centering wrapper
 type optimizedBeamText struct {
-	effect  *syscGo.BeamTextEffect
-	palette []string
+	effect       *syscGo.BeamTextEffect
+	palette      []string
+	text         string
+	termWidth    int
+	termHeight   int
 }
 
 func newOptimizedBeamText(width, height int, palette []string, text string) (*optimizedBeamText, error) {
 	config := syscGo.BeamTextConfig{
-		Width:             width,
-		Height:            height,
+		Width:             0, // Not used when Auto=true
+		Height:            0, // Not used when Auto=true
 		Text:              text,
+		Auto:              true, // Auto-size to text dimensions
 		BeamGradientStops: palette[:minInt(len(palette), 5)],
 	}
 	return &optimizedBeamText{
-		effect:  syscGo.NewBeamTextEffect(config),
-		palette: palette,
+		effect:     syscGo.NewBeamTextEffect(config),
+		palette:    palette,
+		text:       text,
+		termWidth:  width,
+		termHeight: height,
 	}, nil
 }
 
@@ -237,15 +245,21 @@ func (b *optimizedBeamText) Update(frame int) {
 }
 
 func (b *optimizedBeamText) Render() string {
-	return b.effect.Render()
+	// Get the effect output (auto-sized to text)
+	output := b.effect.Render()
+
+	// Center it in the terminal
+	return centerOutput(output, b.termWidth, b.termHeight)
 }
 
 func (b *optimizedBeamText) Resize(width, height int) {
-	// Note: Resize loses the custom text, would need to store it
+	b.termWidth = width
+	b.termHeight = height
 	config := syscGo.BeamTextConfig{
-		Width:             width,
-		Height:            height,
-		Text:              "SYSC-WALLS", // TODO: Store text in struct if resize is needed
+		Width:             0,
+		Height:            0,
+		Text:              b.text,
+		Auto:              true,
 		BeamGradientStops: b.palette[:minInt(len(b.palette), 5)],
 	}
 	b.effect = syscGo.NewBeamTextEffect(config)
@@ -567,4 +581,59 @@ func (r *optimizedRingText) Resize(width, height int) {
 		StaticGradientDir:   syscGo.GradientHorizontal,
 	}
 	r.effect = syscGo.NewRingTextEffect(config)
+}
+
+// centerOutput centers smaller animation output in a larger terminal
+func centerOutput(output string, termWidth, termHeight int) string {
+	lines := strings.Split(output, "\n")
+	if len(lines) == 0 {
+		return output
+	}
+
+	// Calculate vertical offset to center
+	outputHeight := len(lines)
+	verticalOffset := (termHeight - outputHeight) / 2
+	if verticalOffset < 0 {
+		verticalOffset = 0
+	}
+
+	// Find max line width (ignoring ANSI codes for width calculation)
+	maxWidth := 0
+	for _, line := range lines {
+		// Simple width calculation - could be improved to strip ANSI
+		visualWidth := len([]rune(line))
+		if visualWidth > maxWidth {
+			maxWidth = visualWidth
+		}
+	}
+
+	// Calculate horizontal offset to center
+	horizontalOffset := (termWidth - maxWidth) / 2
+	if horizontalOffset < 0 {
+		horizontalOffset = 0
+	}
+
+	// Build centered output
+	var result strings.Builder
+
+	// Add top padding
+	for i := 0; i < verticalOffset; i++ {
+		result.WriteString("\n")
+	}
+
+	// Add horizontally centered lines
+	padding := strings.Repeat(" ", horizontalOffset)
+	for _, line := range lines {
+		result.WriteString(padding)
+		result.WriteString(line)
+		result.WriteString("\n")
+	}
+
+	// Add bottom padding to fill terminal
+	remainingLines := termHeight - verticalOffset - outputHeight
+	for i := 0; i < remainingLines; i++ {
+		result.WriteString("\n")
+	}
+
+	return result.String()
 }

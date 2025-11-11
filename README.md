@@ -1,17 +1,25 @@
 <div align="center">
   <img src="assets/logo.png" alt="sysc-walls">
-  
-  **Terminal screensaver with animations and idle detection**
-  
+
+  **A terminal screensaver, designed in Go and built for Wayland**
+
   [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
   [![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go)](go.mod)
 </div>
 
 ---
 
-A screensaver for your terminal. Watches for idle activity on Wayland (or X11), then displays animations from [sysc-Go](https://github.com/Nomadcxx/sysc-Go) when you step away. Runs as a systemd service so it starts with your session.
+<!-- Placeholder for showcase animation GIF -->
+<div align="center">
+  <img src="assets/showcase.gif" alt="sysc-walls showcase" width="800">
+  <p><em>Showcase of available animations - coming soon</em></p>
+</div>
 
-## Quick Install
+---
+
+Watches for idle activity on Wayland (or X11), then displays animations from [sysc-Go](https://github.com/Nomadcxx/sysc-Go) when you step away. Runs as a systemd service and supports multi-monitor setups across Niri, Hyprland, Sway, and other Wayland compositors.
+
+## Install
 
 **One-line install:**
 ```bash
@@ -30,6 +38,8 @@ The installer automatically:
 - Builds all binaries (daemon, display, client)
 - Installs to `/usr/local/bin`
 - Sets up the systemd user service
+- Imports `WAYLAND_DISPLAY` for compositor detection
+- Backs up and updates your config with current defaults
 
 **Test your installation first:**
 ```bash
@@ -55,156 +65,128 @@ timeout = 5m          # How long before screensaver kicks in
 min_duration = 30s    # Minimum time screensaver runs
 
 [animation]
-effect = matrix       # Which animation to show
-theme = nord          # Color scheme
+effect = matrix-art   # Which animation to show
+theme = rama          # Color scheme
 cycle = false         # Rotate through effects
 
 [daemon]
-debug = false         # Enable logging
+debug = false         # Enable detailed logging
+
+[terminal]
+kitty = true          # Use Kitty terminal (required)
+fullscreen = true     # Launch fullscreen
 ```
-
-To test immediately without waiting:
-```bash
-/usr/local/bin/sysc-walls-daemon -test
-```
-
-## Adding New Themes & Effects
-
-Want to add your own animations or color schemes?
 
 **Available effects:**
-`matrix`, `fire`, `fireworks`, `rain`, `beams`, `beam-text`, `decrypt`, `pour`, `aquarium`, `print`
+`matrix`, `matrix-art`, `fire`, `fireworks`, `rain`, `rain-art`, `beams`, `beam-text`, `decrypt`, `pour`, `aquarium`, `print`, `ring-text`, `blackhole`
 
 **Available themes:**
-`nord`, `dracula`, `gruvbox`, `tokyo-night`, `catppuccin`, `material`, `solarized`, `monochrome`, `transishardjob`
+`rama`, `nord`, `dracula`, `gruvbox`, `tokyo-night`, `catppuccin`, `material`, `solarized`, `monochrome`, `eldritch`, `dark`, `trainsishardjob`
 
-### Adding a New Theme
+For detailed configuration options and troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
-1. Add your theme palette to `internal/animations/optimized.go` in the `getThemePalette()` function:
-   ```go
-   "my-theme": {"#color1", "#color2", "#color3", ...},
-   ```
+## Building
 
-2. Register it in `internal/config/config.go` by adding to the `AvailableThemes` slice:
-   ```go
-   var AvailableThemes = []string{
-       // ... existing themes ...
-       "my-theme",
-   }
-   ```
-
-3. Set it in your config:
-   ```ini
-   [animation]
-   theme = my-theme
-   ```
-
-### Adding a New Effect
-
-1. Implement the effect in [sysc-Go](https://github.com/Nomadcxx/sysc-Go) (the animation library)
-
-2. Add support in `internal/animations/optimized.go` by creating a wrapper struct and adding a case to `CreateOptimizedAnimation()`
-
-3. Register it in `internal/config/config.go` by adding to the `AvailableEffects` slice:
-   ```go
-   var AvailableEffects = []string{
-       // ... existing effects ...
-       "my-effect",
-   }
-   ```
-
-The config validation will automatically show your new options in error messages and help text.
-
-## Building from Source
-
-### Requirements
-
-- **Go 1.24+** ([install](https://go.dev/doc/install))
-- **Git**
-- **Wayland development libraries** (for Wayland support):
-  ```bash
-  # Arch/Manjaro
-  sudo pacman -S wayland
-
-  # Debian/Ubuntu
-  sudo apt install libwayland-dev
-
-  # Fedora
-  sudo dnf install wayland-devel
-  ```
-- **Kitty terminal** (for the screensaver display)
-
-### Build Steps
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/Nomadcxx/sysc-walls.git
-   cd sysc-walls
-   ```
-
-2. **Clone the animation library:**
-   ```bash
-   git clone https://github.com/Nomadcxx/sysc-Go.git
-   ```
-
-3. **Build all binaries:**
-   ```bash
-   go build -o daemon ./cmd/daemon/
-   go build -o display ./cmd/display/
-   go build -o client ./cmd/client/
-   go build -o installer ./cmd/installer/
-   ```
-
-4. **Install binaries:**
-   ```bash
-   sudo cp daemon /usr/local/bin/sysc-walls-daemon
-   sudo cp display /usr/local/bin/sysc-walls-display
-   sudo cp client /usr/local/bin/sysc-walls-client
-   sudo chmod +x /usr/local/bin/sysc-walls-*
-   ```
-
-5. **Install systemd service:**
-   ```bash
-   mkdir -p ~/.config/systemd/user
-   cp systemd/sysc-walls-user.service ~/.config/systemd/user/sysc-walls.service
-   systemctl --user daemon-reload
-   systemctl --user enable sysc-walls.service
-   systemctl --user start sysc-walls.service
-   ```
-
-### Using the Installer (Recommended)
-
-The installer handles all of the above automatically:
+**Quick build with installer (recommended):**
 ```bash
+git clone https://github.com/Nomadcxx/sysc-walls.git
+cd sysc-walls
 go run cmd/installer/main.go
 ```
 
-Or compile it first:
+**Manual build:**
 ```bash
-go build -o installer ./cmd/installer/
-sudo ./installer
+# Clone and build
+git clone https://github.com/Nomadcxx/sysc-walls.git
+cd sysc-walls
+git clone https://github.com/Nomadcxx/sysc-Go.git
+
+go build -o daemon ./cmd/daemon/
+go build -o display ./cmd/display/
+go build -o client ./cmd/client/
+
+# Install
+sudo cp daemon /usr/local/bin/sysc-walls-daemon
+sudo cp display /usr/local/bin/sysc-walls-display
+sudo cp client /usr/local/bin/sysc-walls-client
+sudo chmod +x /usr/local/bin/sysc-walls-*
+
+# Setup systemd
+mkdir -p ~/.config/systemd/user
+cp systemd/sysc-walls-user.service ~/.config/systemd/user/sysc-walls.service
+systemctl --user daemon-reload
+systemctl --user enable sysc-walls.service
+systemctl --user start sysc-walls.service
 ```
 
-## What's Inside
+**Dependencies:**
+- Go 1.24+ ([install](https://go.dev/doc/install))
+- Wayland development libraries for [CGO bindings](pkg/idle/)
+- Kitty terminal
 
-- **multi-monitor support** - automatically launches on all displays (Niri, Sway, Hyprland)
-- **native Wayland idle detection** via CGO bindings to libwayland-client
-- **X11 support** using xprintidle as fallback
-- **systemd integration** so it starts with your session
-- **multiple animations**: matrix, fire, fireworks, rain, beams, decrypt, pour, aquarium, and more
-- **color themes**: dracula, gruvbox, nord, tokyo-night, catppuccin, material, solarized
-- **fullscreen terminal rendering** that actually uses your entire screen
-- **resource efficient** - sleeps when you're active
+```bash
+# Arch/Manjaro
+sudo pacman -S go wayland kitty
 
-## How It Works
+# Debian/Ubuntu
+sudo apt install golang libwayland-dev kitty
 
-Three simple components:
+# Fedora
+sudo dnf install golang wayland-devel kitty
+```
 
-1. **daemon** - Watches for idle activity using Wayland protocols (or X11 as fallback), launches screensaver when you go idle
-2. **display** - Renders sysc-Go animations in fullscreen Kitty terminal
-3. **client** - CLI tool for managing settings (not required, just convenient)
+## Architecture
 
-The daemon uses CGO bindings to native Wayland libraries, following the same approach as swayidle. This means it works reliably across different compositors without depending on archived Go libraries.
+sysc-walls consists of three components working together:
+
+### 1. Daemon ([cmd/daemon/](cmd/daemon/))
+
+The core idle detection service that runs continuously via systemd.
+
+**Key responsibilities:**
+- Monitors system idle time using Wayland protocols (or X11 fallback)
+- Detects your compositor (Niri, Hyprland, Sway) for multi-monitor support
+- Launches screensaver instances on all connected displays
+- Terminates screensaver on keyboard/mouse activity
+
+**Idle detection** ([pkg/idle/](pkg/idle/))
+Uses [CGO bindings to libwayland-client](pkg/idle/) following the same approach as swayidle. This provides native integration with the `ext-idle-notify-v1` Wayland protocol for reliable idle detection across compositors. For X11 systems, falls back to `xprintidle`.
+
+**Multi-monitor support** ([internal/compositor/](internal/compositor/))
+Automatically detects your compositor and enumerates all displays. For each monitor, it focuses the output and launches a screensaver instance, ensuring wall-to-wall coverage across your entire setup.
+
+### 2. Display ([cmd/display/](cmd/display/))
+
+The animation renderer that runs in fullscreen Kitty terminal instances.
+
+**Key responsibilities:**
+- Renders animations from [sysc-Go](https://github.com/Nomadcxx/sysc-Go)
+- Handles terminal sizing and fullscreen mode
+- Applies color themes from configuration
+- Supports text-based effects with ASCII art loading
+
+**Animation integration** ([internal/animations/](internal/animations/))
+Wraps sysc-Go effects with optimized rendering for terminal output. Implements text loading from `sysc-Go/assets/` for crystallization effects like matrix-art and rain-art.
+
+### 3. Client ([cmd/client/](cmd/client/))
+
+Optional CLI tool for managing the daemon and testing configurations.
+
+**Not required for normal operation** - the daemon runs autonomously once started. Useful for quick tests and config validation.
+
+### Configuration ([internal/config/](internal/config/))
+
+Manages all settings from `~/.config/sysc-walls/daemon.conf`. Validates effects, themes, and timeouts. The installer updates this file on each run (with automatic backup to `daemon.conf.backup`).
+
+### Build System
+
+The project uses Go modules with a local `replace` directive for sysc-Go during development:
+
+```go
+replace github.com/Nomadcxx/sysc-Go => ./sysc-Go
+```
+
+The installer automatically clones sysc-Go to maintain this structure. For production releases, this will be replaced with a versioned GitHub module reference.
 
 ## Testing & Debugging
 
@@ -213,46 +195,30 @@ The daemon uses CGO bindings to native Wayland libraries, following the same app
 sysc-walls-daemon -test
 ```
 
-**Test with diagnostics (shows compositor, outputs, timing):**
+**Test with full diagnostics:**
 ```bash
 sysc-walls-daemon -test -debug
 ```
 
-**Check service logs:**
+**Check service status:**
+```bash
+systemctl --user status sysc-walls.service
+```
+
+**View live logs:**
 ```bash
 journalctl --user -u sysc-walls.service -f
 ```
 
-**Test idle detection separately:**
-```bash
-./test-idle-detector --timeout 10
+**Enable debug logging permanently:**
+
+Edit `~/.config/sysc-walls/daemon.conf`:
+```ini
+[daemon]
+debug = true
 ```
 
-### Multi-Monitor Troubleshooting
-
-If screensavers only appear on one monitor:
-
-1. **Verify compositor detection:**
-   ```bash
-   sysc-walls-daemon -test -debug
-   ```
-   Should show your compositor (niri/hyprland/sway) and list all outputs.
-
-2. **Check compositor is supported:**
-   - Niri: Requires `niri msg` command
-   - Hyprland: Requires `hyprctl` command
-   - Sway: Requires `swaymsg` command
-
-3. **Enable debug logging:**
-   Edit `~/.config/sysc-walls/daemon.conf`:
-   ```ini
-   [daemon]
-   debug = true
-   ```
-   Then check logs to see focus and launch sequence.
-
-4. **If windows don't follow focus:**
-   This is usually a timing issue. The daemon waits 100ms after focusing each monitor before launching. Some compositors may need more time.
+For detailed troubleshooting, compositor-specific setup, and common issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ## License
 
@@ -260,4 +226,4 @@ MIT - Do whatever you want with it.
 
 ## Credits
 
-Built on top of [sysc-Go](https://github.com/Nomadcxx/sysc-Go) for animations. Inspired by classic terminal screensavers but actually functional on modern Wayland systems.
+Built on top of [sysc-Go](https://github.com/Nomadcxx/sysc-Go) for animations. Inspired by classic terminal screensavers but designed for modern Wayland systems.

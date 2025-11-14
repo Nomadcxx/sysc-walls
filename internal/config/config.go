@@ -6,44 +6,22 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	syscGo "github.com/Nomadcxx/sysc-Go/animations"
 )
 
-// Available animation effects
-var AvailableEffects = []string{
-	"matrix",
-	"matrix-art",
-	"fire",
-	"fireworks",
-	"rain",
-	"rain-art",
-	"beams",
-	"beam-text",
-	"decrypt",
-	"pour",
-	"aquarium",
-	"print",
-	"blackhole",
-	"ring-text",
-}
+// Available animation effects - auto-generated from sysc-Go registry
+var AvailableEffects = syscGo.GetEffectNames()
 
-// Available color themes
-var AvailableThemes = []string{
-	"nord",
-	"dracula",
-	"gruvbox",
-	"tokyo-night",
-	"catppuccin",
-	"material",
-	"solarized",
-	"monochrome",
-	"trainsishardjob",
-	"rama",
-	"eldritch",
-	"dark",
-}
+// Available color themes - auto-generated from sysc-Go registry
+var AvailableThemes = syscGo.GetThemeNames()
+
+// MinimumSyscGoVersion is the minimum required version of sysc-Go
+const MinimumSyscGoVersion = "1.0.1"
 
 // Config represents the daemon configuration
 type Config struct {
@@ -52,6 +30,7 @@ type Config struct {
 	debug              bool
 	animationEffect    string
 	animationTheme     string
+	animationFile      string // Custom artwork file path for text-based effects
 	cycleAnimations    bool
 	terminalKitty      bool
 	terminalFullscreen bool
@@ -162,6 +141,16 @@ func (c *Config) parseConfigLine(key, value string) {
 			fmt.Fprintf(os.Stderr, "Warning: Invalid animation theme '%s' in config file. Using default.\n", value)
 			fmt.Fprintf(os.Stderr, "Available themes: %s\n", strings.Join(AvailableThemes, ", "))
 		}
+	case "animation.file":
+		// Expand environment variables and home directory
+		expandedPath := os.ExpandEnv(value)
+		expandedPath = strings.Replace(expandedPath, "~", os.Getenv("HOME"), 1)
+		// Validate that file path is absolute
+		if filepath.IsAbs(expandedPath) {
+			c.animationFile = expandedPath
+		} else {
+			fmt.Fprintf(os.Stderr, "Warning: Animation file path must be absolute, got '%s'. Ignoring.\n", value)
+		}
 	case "animation.cycle":
 		if boolVal, err := strconv.ParseBool(value); err == nil {
 			c.cycleAnimations = boolVal
@@ -212,6 +201,21 @@ func parseDuration(value string) (time.Duration, error) {
 	}
 
 	return 0, fmt.Errorf("invalid duration format: %s", value)
+}
+
+// CheckSyscGoVersion verifies that the sysc-Go library version is compatible
+func CheckSyscGoVersion() error {
+	actualVersion := syscGo.GetLibraryVersion()
+	if actualVersion < MinimumSyscGoVersion {
+		return fmt.Errorf("sysc-Go version mismatch: found %s, requires >= %s",
+			actualVersion, MinimumSyscGoVersion)
+	}
+	return nil
+}
+
+// GetSyscGoVersion returns the current sysc-Go library version
+func GetSyscGoVersion() string {
+	return syscGo.GetLibraryVersion()
 }
 
 // createDefaultConfig creates a default configuration file
@@ -373,6 +377,11 @@ func (c *Config) GetAnimationTheme() string {
 	return c.animationTheme
 }
 
+// GetAnimationFile returns the custom animation file path
+func (c *Config) GetAnimationFile() string {
+	return c.animationFile
+}
+
 // SetAnimationTheme sets the animation theme with validation
 func (c *Config) SetAnimationTheme(theme string) error {
 	if !IsValidTheme(theme) {
@@ -399,6 +408,43 @@ func IsValidTheme(theme string) bool {
 			return true
 		}
 	}
+	return false
+}
+
+// isSafeIdentifier checks if a string contains only safe characters (alphanumeric, hyphens, underscores)
+// This prevents shell metacharacters and command injection
+func isSafeIdentifier(s string) bool {
+	// Allow: letters, numbers, hyphens, underscores
+	// Block: shell metacharacters like ; | & $ ( ) ` < > etc.
+	matched, _ := regexp.MatchString(`^[a-zA-Z0-9_-]+$`, s)
+	return matched
+}
+
+// isSafePath checks if a file path is absolute and within allowed directories
+func isSafePath(path string) bool {
+	// Must be absolute path
+	if !filepath.IsAbs(path) {
+		return false
+	}
+
+	// Clean the path to resolve any .. or . components
+	cleanPath := filepath.Clean(path)
+
+	// Only allow paths under user's home, /usr/share, /usr/local/share
+	homeDir := os.Getenv("HOME")
+	allowedPrefixes := []string{
+		filepath.Join(homeDir, ".local", "share"),
+		filepath.Join(homeDir, ".config"),
+		"/usr/share",
+		"/usr/local/share",
+	}
+
+	for _, prefix := range allowedPrefixes {
+		if strings.HasPrefix(cleanPath, prefix) {
+			return true
+		}
+	}
+
 	return false
 }
 
@@ -446,19 +492,49 @@ func (c *Config) GetTerminalArgs() []string {
 	return args
 }
 
-// GetScreensaverCommand returns the command to launch the screensaver
-func (c *Config) GetScreensaverCommand() string {
+// GetScreensaverCommand returns the command and arguments to launch the screensaver
+// Returns (terminal, args, error) where terminal is the executable and args are its arguments
+func (c *Config) GetScreensaverCommand() (string, []string, error) {
 	terminal := c.GetTerminalLauncher()
-	args := c.GetTerminalArgs()
 	effect := c.GetAnimationEffect()
 	theme := c.GetAnimationTheme()
+	file := c.GetAnimationFile()
 
-	// Build the command to launch kitty with the display binary
-	// Use unique class name to identify screensaver window
-	parts := []string{terminal}
-	parts = append(parts, args...)
-	parts = append(parts, "--class", "sysc-walls-screensaver")
-	parts = append(parts, "/usr/local/bin/sysc-walls-display", "--effect", effect, "--theme", theme, "--fullscreen")
+	// Validate effect name (prevent command injection)
+	if !isSafeIdentifier(effect) {
+		return "", nil, fmt.Errorf("invalid animation effect: %s (contains unsafe characters)", effect)
+	}
 
+	// Validate theme name (prevent command injection)
+	if !isSafeIdentifier(theme) {
+		return "", nil, fmt.Errorf("invalid animation theme: %s (contains unsafe characters)", theme)
+	}
+
+	// Build arguments array
+	args := c.GetTerminalArgs()
+	args = append(args, "--class", "sysc-walls-screensaver")
+	args = append(args, "/usr/local/bin/sysc-walls-display", "--effect", effect, "--theme", theme)
+
+	// Add custom file path if specified and valid
+	if file != "" {
+		if !isSafePath(file) {
+			return "", nil, fmt.Errorf("invalid animation file path: %s (must be absolute path in allowed directory)", file)
+		}
+		args = append(args, "--file", file)
+	}
+
+	args = append(args, "--fullscreen")
+
+	return terminal, args, nil
+}
+
+// GetScreensaverCommandString returns the command as a string for logging purposes only
+// DO NOT use this for execution - use GetScreensaverCommand() instead
+func (c *Config) GetScreensaverCommandString() string {
+	terminal, args, err := c.GetScreensaverCommand()
+	if err != nil {
+		return fmt.Sprintf("ERROR: %v", err)
+	}
+	parts := append([]string{terminal}, args...)
 	return strings.Join(parts, " ")
 }

@@ -107,41 +107,22 @@ func (c *AnimationCycler) GetRandomOrder() bool {
 }
 
 // CreateDefaultCycle creates a cycle with the default animations
+// NOTE: This function is deprecated - use CreateOptimizedAnimation instead
+// Keeping for potential future use
+/*
 func CreateDefaultCycle() (*AnimationCycler, error) {
-	// Create the default animations
-	matrix, err := NewMatrixAnimation(80, 24, "dracula")
-	if err != nil {
-		return nil, err
-	}
+	animations := []Animation{}
+	effects := []string{"matrix", "fire", "fireworks", "rain", "beams"}
 
-	fire, err := NewFireAnimation(80, 24, "dracula")
-	if err != nil {
-		return nil, err
-	}
-
-	fireworks, err := NewFireworksAnimation(80, 24, "dracula")
-	if err != nil {
-		return nil, err
-	}
-
-	rain, err := NewRainAnimation(80, 24, "dracula")
-	if err != nil {
-		return nil, err
-	}
-
-	beams, err := NewBeamsAnimation(80, 24, "dracula")
-	if err != nil {
-		return nil, err
-	}
-
-	animations := []Animation{
-		matrix,
-		fire,
-		fireworks,
-		rain,
-		beams,
+	for _, effect := range effects {
+		anim, err := CreateOptimizedAnimation(effect, 80, 24, "dracula")
+		if err != nil {
+			return nil, err
+		}
+		animations = append(animations, anim)
 	}
 
 	// Create a cycler with 2 minute intervals and random order
 	return NewAnimationCycler(animations, 2*time.Minute, true), nil
 }
+*/

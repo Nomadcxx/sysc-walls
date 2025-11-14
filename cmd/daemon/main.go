@@ -18,6 +18,7 @@ import (
 	"github.com/Nomadcxx/sysc-walls/internal/compositor"
 	"github.com/Nomadcxx/sysc-walls/internal/config"
 	"github.com/Nomadcxx/sysc-walls/internal/systemd"
+	"github.com/Nomadcxx/sysc-walls/internal/version"
 	"github.com/Nomadcxx/sysc-walls/pkg/daemonize"
 	"github.com/Nomadcxx/sysc-walls/pkg/idle"
 )
@@ -61,15 +62,23 @@ func NewDaemon(cfg *config.Config) *Daemon {
 func main() {
 	// Parse command line flags
 	var (
-		runAsDaemon = flag.Bool("daemon", false, "Run as daemon (no output)")
-		configPath  = flag.String("config", "", "Path to config file")
-		start       = flag.Bool("start", false, "Start the daemon")
-		stop        = flag.Bool("stop", false, "Stop the daemon")
-		test        = flag.Bool("test", false, "Test mode - activate screensaver immediately")
-		demo        = flag.Bool("demo", false, "Demo mode - cycle through all effects (30s each)")
-		debug       = flag.Bool("debug", false, "Enable debug logging")
+		runAsDaemon  = flag.Bool("daemon", false, "Run as daemon (no output)")
+		configPath   = flag.String("config", "", "Path to config file")
+		start        = flag.Bool("start", false, "Start the daemon")
+		stop         = flag.Bool("stop", false, "Stop the daemon")
+		test         = flag.Bool("test", false, "Test mode - activate screensaver immediately")
+		demo         = flag.Bool("demo", false, "Demo mode - cycle through all effects (30s each)")
+		debug        = flag.Bool("debug", false, "Enable debug logging")
+		showVersion  = flag.Bool("version", false, "Show version information")
+		showVersionV = flag.Bool("v", false, "Show version information (shorthand)")
 	)
 	flag.Parse()
+
+	// Handle version flag
+	if *showVersion || *showVersionV {
+		fmt.Printf("%s\n", version.GetFullVersion())
+		os.Exit(0)
+	}
 
 	// Expand config path with default
 	expandedConfigPath := *configPath
@@ -90,6 +99,11 @@ func main() {
 		}
 	}
 
+	// Check sysc-Go library version compatibility
+	if err := config.CheckSyscGoVersion(); err != nil {
+		log.Fatalf("sysc-Go version incompatibility: %v", err)
+	}
+
 	// Initialize config manager
 	cfg := config.NewConfig()
 	if err := cfg.LoadFromFile(expandedConfigPath); err != nil {
@@ -99,6 +113,7 @@ func main() {
 	// Configure debug if requested
 	if *debug {
 		cfg.SetDebug(true)
+		log.Printf("Version: %s", version.GetFullVersion())
 	}
 
 	// Create daemon instance
@@ -267,10 +282,15 @@ func (d *Daemon) LaunchScreensaver() {
 		return
 	}
 
-	screensaverCmd := d.config.GetScreensaverCommand()
+	// Get validated screensaver command
+	terminal, args, err := d.config.GetScreensaverCommand()
+	if err != nil {
+		log.Printf("ERROR: Invalid screensaver configuration: %v", err)
+		return
+	}
 
 	if d.debug {
-		log.Printf("Launching screensaver: %s", screensaverCmd)
+		log.Printf("Launching screensaver: %s %v", terminal, args)
 	}
 
 	// Detect compositor
@@ -280,7 +300,7 @@ func (d *Daemon) LaunchScreensaver() {
 		if d.debug {
 			log.Printf("Compositor detection failed: %v, launching single instance", err)
 		}
-		if err := d.systemD.LaunchScreensaver(screensaverCmd, "default"); err != nil {
+		if err := d.systemD.LaunchScreensaver(terminal, args, "default"); err != nil {
 			log.Printf("Failed to launch screensaver: %v", err)
 		}
 		return
@@ -295,7 +315,7 @@ func (d *Daemon) LaunchScreensaver() {
 	if err != nil {
 		log.Printf("Failed to list outputs: %v", err)
 		// Fallback: launch single instance
-		if err := d.systemD.LaunchScreensaver(screensaverCmd, "default"); err != nil {
+		if err := d.systemD.LaunchScreensaver(terminal, args, "default"); err != nil {
 			log.Printf("Failed to launch screensaver: %v", err)
 		}
 		return
@@ -339,7 +359,7 @@ func (d *Daemon) LaunchScreensaver() {
 		time.Sleep(250 * time.Millisecond)
 
 		// Launch screensaver (window should follow focus)
-		if err := d.systemD.LaunchScreensaver(screensaverCmd, output.Name); err != nil {
+		if err := d.systemD.LaunchScreensaver(terminal, args, output.Name); err != nil {
 			log.Printf("Failed to launch screensaver on %s: %v", output.Name, err)
 			continue
 		}
@@ -602,22 +622,20 @@ func showDemoMode(daemon *Daemon, debugMode bool, sigChan chan os.Signal) {
 		// Set current effect
 		daemon.config.SetAnimationEffect(effect)
 
-		// Build command for single monitor launch (no multi-monitor detection)
-		terminal := daemon.config.GetTerminalLauncher()
-		args := daemon.config.GetTerminalArgs()
-		cmdParts := []string{terminal}
-		cmdParts = append(cmdParts, args...)
-		cmdParts = append(cmdParts, "--class", "sysc-walls-screensaver")
-		cmdParts = append(cmdParts, "/usr/local/bin/sysc-walls-display", "--effect", effect, "--theme", theme, "--fullscreen")
-
-		screensaverCmd := strings.Join(cmdParts, " ")
+		// Get validated screensaver command
+		terminal, args, err := daemon.config.GetScreensaverCommand()
+		if err != nil {
+			fmt.Println(colorError.Render(fmt.Sprintf("  ✗ Invalid configuration: %v", err)))
+			continue
+		}
 
 		if debugMode {
-			fmt.Println(colorMuted.Render("  Command: " + screensaverCmd))
+			cmdParts := append([]string{terminal}, args...)
+			fmt.Println(colorMuted.Render("  Command: " + strings.Join(cmdParts, " ")))
 		}
 
 		// Launch on single monitor only
-		if err := daemon.systemD.LaunchScreensaver(screensaverCmd, "demo"); err != nil {
+		if err := daemon.systemD.LaunchScreensaver(terminal, args, "demo"); err != nil {
 			fmt.Println(colorError.Render(fmt.Sprintf("  ✗ Failed to launch: %v", err)))
 			continue
 		}

@@ -13,10 +13,11 @@ import (
 
 	"github.com/Nomadcxx/sysc-walls/internal/animations"
 	"github.com/Nomadcxx/sysc-walls/internal/clock"
+	"github.com/Nomadcxx/sysc-walls/internal/version"
 	"github.com/Nomadcxx/sysc-walls/pkg/utils"
-)
 
-const version = "1.0.0"
+	syscGo "github.com/Nomadcxx/sysc-Go/animations"
+)
 
 // loadTextContent loads text from a file with fallback to default SYSC.txt
 func loadTextContent(customPath string, debug bool) string {
@@ -58,15 +59,9 @@ func loadTextContent(customPath string, debug bool) string {
 }
 
 // isTextBasedEffect checks if an effect uses text content
+// Now uses sysc-Go registry instead of hardcoded list
 func isTextBasedEffect(effect string) bool{
-	textBasedEffects := map[string]bool{
-		"matrix-art": true,
-		"rain-art":   true,
-		"blackhole":  true,
-		"ring-text":  true,
-		"beam-text":  true,
-	}
-	return textBasedEffects[effect]
+	return syscGo.IsTextBasedEffect(effect)
 }
 
 // overlayDateTime overlays date-time on animation output
@@ -129,20 +124,21 @@ func overlayDateTime(animOutput string, width, height int, isTextBased bool) str
 func main() {
 	// Parse command line flags
 	var (
-		effect     = flag.String("effect", "matrix", "Animation effect to display")
-		theme      = flag.String("theme", "dracula", "Color theme for animation")
-		file       = flag.String("file", "", "Text file for text-based effects")
-		datetime   = flag.Bool("datetime", false, "Show date and time overlay")
-		showVersion = flag.Bool("v", false, "Show version information")
-		debug      = flag.Bool("debug", false, "Enable debug logging")
-		noClear    = flag.Bool("no-clear", false, "Don't clear the screen before animation")
-		fullScreen = flag.Bool("fullscreen", false, "Run in fullscreen mode")
+		effect       = flag.String("effect", "matrix", "Animation effect to display")
+		theme        = flag.String("theme", "dracula", "Color theme for animation")
+		file         = flag.String("file", "", "Text file for text-based effects")
+		datetime     = flag.Bool("datetime", false, "Show date and time overlay")
+		showVersion  = flag.Bool("version", false, "Show version information")
+		showVersionV = flag.Bool("v", false, "Show version information (shorthand)")
+		debug        = flag.Bool("debug", false, "Enable debug logging")
+		noClear      = flag.Bool("no-clear", false, "Don't clear the screen before animation")
+		fullScreen   = flag.Bool("fullscreen", false, "Run in fullscreen mode")
 	)
 	flag.Parse()
 
 	// Handle version flag
-	if *showVersion {
-		fmt.Printf("sysc-walls-display version %s\n", version)
+	if *showVersion || *showVersionV {
+		fmt.Printf("%s\n", version.GetFullVersion())
 		os.Exit(0)
 	}
 

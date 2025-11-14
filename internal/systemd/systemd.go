@@ -34,18 +34,12 @@ func NewSystemD(cfg *config.Config) *SystemD {
 }
 
 // LaunchScreensaver starts the screensaver on a specific output
-func (s *SystemD) LaunchScreensaver(command string, outputName string) error {
+func (s *SystemD) LaunchScreensaver(terminal string, args []string, outputName string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Parse the command string
-	args, err := parseCommand(command)
-	if err != nil {
-		return fmt.Errorf("failed to parse command: %w", err)
-	}
-
-	// Create the command
-	cmd := exec.Command(args[0], args[1:]...)
+	// Create the command with validated arguments
+	cmd := exec.Command(terminal, args...)
 
 	// Start the process
 	if err := cmd.Start(); err != nil {

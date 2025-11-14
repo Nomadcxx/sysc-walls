@@ -29,6 +29,8 @@ func CreateOptimizedAnimationWithText(effect string, width, height int, theme st
 		return newOptimizedMatrixArt(width, height, palette, text)
 	case "fire":
 		return newOptimizedFire(width, height, palette)
+	case "fire-text":
+		return newOptimizedFireText(width, height, palette, text)
 	case "fireworks":
 		return newOptimizedFireworks(width, height, palette)
 	case "rain":
@@ -130,6 +132,29 @@ func (f *optimizedFire) Render() string {
 }
 
 func (f *optimizedFire) Resize(width, height int) {
+	f.effect.Resize(width, height)
+}
+
+// FireText - fire effect with text as negative space
+type optimizedFireText struct {
+	effect *syscGo.FireTextEffect
+}
+
+func newOptimizedFireText(width, height int, palette []string, text string) (*optimizedFireText, error) {
+	return &optimizedFireText{
+		effect: syscGo.NewFireTextEffect(width, height, palette, text),
+	}, nil
+}
+
+func (f *optimizedFireText) Update(frame int) {
+	f.effect.Update()
+}
+
+func (f *optimizedFireText) Render() string {
+	return f.effect.Render()
+}
+
+func (f *optimizedFireText) Resize(width, height int) {
 	f.effect.Resize(width, height)
 }
 

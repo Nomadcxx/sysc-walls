@@ -601,12 +601,27 @@ fullscreen = true
 func importWaylandEnvironment(m *model) error {
 	sudoUser := os.Getenv("SUDO_USER")
 
+	// Get actual user UID for XDG_RUNTIME_DIR
+	actualUID := os.Getuid()
+	if sudoUser != "" {
+		cmd := exec.Command("id", "-u", sudoUser)
+		output, err := cmd.Output()
+		if err == nil {
+			if uid, err := strconv.Atoi(strings.TrimSpace(string(output))); err == nil {
+				actualUID = uid
+			}
+		}
+	}
+
 	// Import WAYLAND_DISPLAY for systemd user services
 	// This is critical for compositor detection to work
-	cmd := exec.Command("systemctl", "--user", "import-environment", "WAYLAND_DISPLAY")
+	var cmd *exec.Cmd
 	if sudoUser != "" {
-		// Run as the actual user, not root
-		cmd = exec.Command("sudo", "-u", sudoUser, "systemctl", "--user", "import-environment", "WAYLAND_DISPLAY")
+		// Run as the actual user with proper environment
+		cmd = exec.Command("sudo", "-u", sudoUser, "env", fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID), "systemctl", "--user", "import-environment", "WAYLAND_DISPLAY")
+	} else {
+		cmd = exec.Command("systemctl", "--user", "import-environment", "WAYLAND_DISPLAY")
+		cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID))
 	}
 
 	// Run the command, but don't fail if it doesn't work
@@ -665,11 +680,13 @@ func installSystemdService(m *model) error {
 	}
 
 	// Reload user systemd as the actual user
-	cmd := exec.Command("systemctl", "--user", "daemon-reload")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID))
+	var cmd *exec.Cmd
 	if sudoUser != "" {
-		// Run as the actual user, not root
-		cmd = exec.Command("sudo", "-u", sudoUser, "systemctl", "--user", "daemon-reload")
+		// Run as the actual user with proper environment
+		cmd = exec.Command("sudo", "-u", sudoUser, "env", fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID), "systemctl", "--user", "daemon-reload")
+	} else {
+		cmd = exec.Command("systemctl", "--user", "daemon-reload")
+		cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID))
 	}
 
 	output, err := cmd.CombinedOutput()
@@ -685,10 +702,25 @@ func installSystemdService(m *model) error {
 func enableSystemdService(m *model) error {
 	sudoUser := os.Getenv("SUDO_USER")
 
-	cmd := exec.Command("systemctl", "--user", "enable", "sysc-walls.service")
+	// Get actual user UID for XDG_RUNTIME_DIR
+	actualUID := os.Getuid()
 	if sudoUser != "" {
-		// Run as the actual user, not root
-		cmd = exec.Command("sudo", "-u", sudoUser, "systemctl", "--user", "enable", "sysc-walls.service")
+		cmd := exec.Command("id", "-u", sudoUser)
+		output, err := cmd.Output()
+		if err == nil {
+			if uid, err := strconv.Atoi(strings.TrimSpace(string(output))); err == nil {
+				actualUID = uid
+			}
+		}
+	}
+
+	var cmd *exec.Cmd
+	if sudoUser != "" {
+		// Run as the actual user with proper environment
+		cmd = exec.Command("sudo", "-u", sudoUser, "env", fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID), "systemctl", "--user", "enable", "sysc-walls.service")
+	} else {
+		cmd = exec.Command("systemctl", "--user", "enable", "sysc-walls.service")
+		cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID))
 	}
 
 	output, err := cmd.CombinedOutput()

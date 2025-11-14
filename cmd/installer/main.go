@@ -486,28 +486,12 @@ func isVersionCompatible(version, minVersion string) bool {
 }
 
 func checkSyscGo(m *model) error {
-	// First check if sysc-Go is already installed system-wide (e.g., via AUR)
-	cmd := exec.Command("go", "list", "-m", "github.com/Nomadcxx/sysc-Go")
-	output, err := cmd.CombinedOutput()
-	if err == nil && len(output) > 0 {
-		// sysc-Go is installed system-wide, check version
-		versionOutput := strings.TrimSpace(string(output))
-		// Parse version string (format: "github.com/Nomadcxx/sysc-Go v1.0.2")
-		parts := strings.Fields(versionOutput)
-		if len(parts) >= 2 {
-			version := strings.TrimPrefix(parts[1], "v")
-			// Check if version is >= 1.0.1 (current GitHub release)
-			if isVersionCompatible(version, "1.0.1") {
-				// Compatible version installed system-wide, no need to clone
-				return nil
-			}
-		}
-		// Version might be too old, but let Go build handle it
-		// If build fails, user will see the error
-		return nil
-	}
+	// Note: We always need ./sysc-Go directory locally because go.mod has
+	// a replace directive: replace github.com/Nomadcxx/sysc-Go => ./sysc-Go
+	// Even if sysc-Go is installed system-wide, the replace directive requires
+	// the local directory to exist for builds to succeed.
 
-	// Not installed system-wide, check if local sysc-Go directory exists
+	// Check if local sysc-Go directory exists
 	if _, err := os.Stat("sysc-Go"); err == nil {
 		// Directory exists, check if it's a valid git repo
 		if _, err := os.Stat("sysc-Go/.git"); err == nil {
@@ -527,8 +511,8 @@ func checkSyscGo(m *model) error {
 	}
 
 	// Clone sysc-Go repository
-	cmd = exec.Command("git", "clone", "https://github.com/Nomadcxx/sysc-Go.git", "sysc-Go")
-	output, err = cmd.CombinedOutput()
+	cmd := exec.Command("git", "clone", "https://github.com/Nomadcxx/sysc-Go.git", "sysc-Go")
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to clone sysc-Go: %s", string(output))
 	}

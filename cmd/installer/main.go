@@ -676,6 +676,7 @@ func installAsciiArt(m *model) error {
 	}
 
 	filesCopied := 0
+	filesSkipped := 0
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -689,6 +690,12 @@ func installAsciiArt(m *model) error {
 		srcPath := filepath.Join(assetsDir, entry.Name())
 		dstPath := filepath.Join(asciiDir, entry.Name())
 
+		// Check if file already exists - don't overwrite existing ASCII art
+		if _, err := os.Stat(dstPath); err == nil {
+			filesSkipped++
+			continue
+		}
+
 		// Read source file
 		data, err := os.ReadFile(srcPath)
 		if err != nil {
@@ -696,7 +703,7 @@ func installAsciiArt(m *model) error {
 			continue
 		}
 
-		// Write to destination
+		// Write to destination (only if it doesn't exist)
 		if err := os.WriteFile(dstPath, data, 0644); err != nil {
 			return fmt.Errorf("failed to copy %s: %v", entry.Name(), err)
 		}
@@ -704,10 +711,12 @@ func installAsciiArt(m *model) error {
 		filesCopied++
 	}
 
-	if filesCopied == 0 {
+	if filesCopied == 0 && filesSkipped == 0 {
 		// Don't fail - ASCII art is optional, screensaver will use fallback text
 		fmt.Fprintf(os.Stderr, "Warning: No ASCII art files found in sysc-Go/assets\n")
 		fmt.Fprintf(os.Stderr, "Text-based effects will use default fallback text\n")
+	} else if filesSkipped > 0 {
+		fmt.Fprintf(os.Stderr, "Preserved %d existing ASCII art file(s)\n", filesSkipped)
 	}
 
 	return nil

@@ -37,7 +37,9 @@ func loadTextContent(customPath string, debug bool) string {
 	homeDir := os.Getenv("HOME")
 	defaultPaths := []string{
 		filepath.Join(homeDir, ".config", "sysc-walls", "ascii", "SYSC.txt"),
+		filepath.Join(homeDir, ".local", "share", "syscgo", "walls", "SYSC.txt"),
 		filepath.Join(homeDir, ".local", "share", "sysc-walls", "SYSC.txt"),
+		"/usr/share/syscgo/assets/SYSC.txt",
 		"/usr/share/sysc-walls/SYSC.txt",
 		"sysc-Go/assets/SYSC.txt", // For development
 	}

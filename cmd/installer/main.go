@@ -194,11 +194,10 @@ func (m *model) initTasks() {
 	} else {
 		m.tasks = []installTask{
 			{name: "Check privileges", description: "Checking root access", execute: checkPrivileges, status: statusPending},
-			{name: "Check sysc-Go", description: "Checking sysc-Go library (may clone from GitHub)", execute: checkSyscGo, status: statusPending},
+			{name: "Check sysc-Go", description: "Checking sysc-Go library (cloning from GitHub if needed)", execute: checkSyscGo, status: statusPending},
 			{name: "Build binaries", description: "Building sysc-walls components", execute: buildBinaries, status: statusPending},
 			{name: "Install binaries", description: "Installing to /usr/local/bin", execute: installBinaries, status: statusPending},
 			{name: "Update config", description: "Updating daemon configuration", execute: updateConfig, status: statusPending},
-			{name: "Install ASCII art", description: "Installing ASCII art files", execute: installAsciiArt, status: statusPending},
 			{name: "Install systemd service", description: "Installing systemd service", execute: installSystemdService, status: statusPending},
 			{name: "Import environment", description: "Importing Wayland environment for systemd", execute: importWaylandEnvironment, status: statusPending},
 			{name: "Enable systemd service", description: "Enabling systemd service", execute: enableSystemdService, status: statusPending, optional: true},
@@ -453,44 +452,7 @@ func stopDaemon(m *model) error {
 	return nil
 }
 
-// isVersionCompatible checks if version is >= minVersion using simple semantic versioning
-// Supports format: "1.0.2" (major.minor.patch)
-func isVersionCompatible(version, minVersion string) bool {
-	parseVersion := func(v string) (major, minor, patch int) {
-		parts := strings.Split(v, ".")
-		if len(parts) >= 1 {
-			major, _ = strconv.Atoi(parts[0])
-		}
-		if len(parts) >= 2 {
-			minor, _ = strconv.Atoi(parts[1])
-		}
-		if len(parts) >= 3 {
-			patch, _ = strconv.Atoi(parts[2])
-		}
-		return
-	}
-
-	vMajor, vMinor, vPatch := parseVersion(version)
-	minMajor, minMinor, minPatch := parseVersion(minVersion)
-
-	if vMajor > minMajor {
-		return true
-	}
-	if vMajor == minMajor && vMinor > minMinor {
-		return true
-	}
-	if vMajor == minMajor && vMinor == minMinor && vPatch >= minPatch {
-		return true
-	}
-	return false
-}
-
 func checkSyscGo(m *model) error {
-	// Note: We always need ./sysc-Go directory locally because go.mod has
-	// a replace directive: replace github.com/Nomadcxx/sysc-Go => ./sysc-Go
-	// Even if sysc-Go is installed system-wide, the replace directive requires
-	// the local directory to exist for builds to succeed.
-
 	// Check if local sysc-Go directory exists
 	if _, err := os.Stat("sysc-Go"); err == nil {
 		// Directory exists, check if it's a valid git repo
@@ -631,76 +593,6 @@ fullscreen = true
 	// Write new config (overwrite existing)
 	if err := os.WriteFile(configPath, []byte(defaultConfig), 0644); err != nil {
 		return fmt.Errorf("failed to write config: %v", err)
-	}
-
-	return nil
-}
-
-func installAsciiArt(m *model) error {
-	// Get the actual user's home directory (not root when using sudo)
-	homeDir := os.Getenv("HOME")
-	sudoUser := os.Getenv("SUDO_USER")
-	if sudoUser != "" {
-		homeDir = "/home/" + sudoUser
-	}
-
-	// ASCII art directory path
-	asciiDir := filepath.Join(homeDir, ".config", "sysc-walls", "ascii")
-
-	// Create ASCII art directory if it doesn't exist
-	if err := os.MkdirAll(asciiDir, 0755); err != nil {
-		return fmt.Errorf("failed to create ASCII art directory: %v", err)
-	}
-
-	// Copy all .txt files from sysc-Go/assets/ to ascii directory
-	assetsDir := "sysc-Go/assets"
-	entries, err := os.ReadDir(assetsDir)
-	if err != nil {
-		return fmt.Errorf("failed to read sysc-Go assets directory: %v", err)
-	}
-
-	filesCopied := 0
-	filesSkipped := 0
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		// Only copy .txt files
-		if !strings.HasSuffix(entry.Name(), ".txt") {
-			continue
-		}
-
-		srcPath := filepath.Join(assetsDir, entry.Name())
-		dstPath := filepath.Join(asciiDir, entry.Name())
-
-		// Check if file already exists - don't overwrite existing ASCII art
-		if _, err := os.Stat(dstPath); err == nil {
-			filesSkipped++
-			continue
-		}
-
-		// Read source file
-		data, err := os.ReadFile(srcPath)
-		if err != nil {
-			// Don't fail if one file can't be read, just skip it
-			continue
-		}
-
-		// Write to destination (only if it doesn't exist)
-		if err := os.WriteFile(dstPath, data, 0644); err != nil {
-			return fmt.Errorf("failed to copy %s: %v", entry.Name(), err)
-		}
-
-		filesCopied++
-	}
-
-	if filesCopied == 0 && filesSkipped == 0 {
-		// Don't fail - ASCII art is optional, screensaver will use fallback text
-		fmt.Fprintf(os.Stderr, "Warning: No ASCII art files found in sysc-Go/assets\n")
-		fmt.Fprintf(os.Stderr, "Text-based effects will use default fallback text\n")
-	} else if filesSkipped > 0 {
-		fmt.Fprintf(os.Stderr, "Preserved %d existing ASCII art file(s)\n", filesSkipped)
 	}
 
 	return nil

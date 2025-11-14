@@ -182,7 +182,7 @@ func (m *model) initTasks() {
 	} else {
 		m.tasks = []installTask{
 			{name: "Check privileges", description: "Checking root access", execute: checkPrivileges, status: statusPending},
-			{name: "Clone sysc-Go", description: "Cloning sysc-Go animation library", execute: cloneSyscGo, status: statusPending},
+			{name: "Check sysc-Go", description: "Checking sysc-Go animation library", execute: checkSyscGo, status: statusPending},
 			{name: "Build binaries", description: "Building sysc-walls components", execute: buildBinaries, status: statusPending},
 			{name: "Install binaries", description: "Installing to /usr/local/bin", execute: installBinaries, status: statusPending},
 			{name: "Update config", description: "Updating daemon configuration", execute: updateConfig, status: statusPending},
@@ -416,8 +416,23 @@ func stopDaemon(m *model) error {
 	return nil
 }
 
-func cloneSyscGo(m *model) error {
-	// Check if sysc-Go directory already exists
+func checkSyscGo(m *model) error {
+	// First check if sysc-Go is already installed system-wide (e.g., via AUR)
+	cmd := exec.Command("go", "list", "-m", "github.com/Nomadcxx/sysc-Go")
+	output, err := cmd.CombinedOutput()
+	if err == nil && len(output) > 0 {
+		// sysc-Go is installed system-wide, check version
+		versionOutput := string(output)
+		if strings.Contains(versionOutput, "v1.0.2") || strings.Contains(versionOutput, "v1.0.3") {
+			// Compatible version installed system-wide, no need to clone
+			return nil
+		}
+		// Version might be too old, but let Go build handle it
+		// If build fails, user will see the error
+		return nil
+	}
+
+	// Not installed system-wide, check if local sysc-Go directory exists
 	if _, err := os.Stat("sysc-Go"); err == nil {
 		// Directory exists, check if it's a valid git repo
 		if _, err := os.Stat("sysc-Go/.git"); err == nil {
@@ -437,8 +452,8 @@ func cloneSyscGo(m *model) error {
 	}
 
 	// Clone sysc-Go repository
-	cmd := exec.Command("git", "clone", "https://github.com/Nomadcxx/sysc-Go.git", "sysc-Go")
-	output, err := cmd.CombinedOutput()
+	cmd = exec.Command("git", "clone", "https://github.com/Nomadcxx/sysc-Go.git", "sysc-Go")
+	output, err = cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to clone sysc-Go: %s", string(output))
 	}

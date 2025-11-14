@@ -21,7 +21,7 @@ var AvailableEffects = syscGo.GetEffectNames()
 var AvailableThemes = syscGo.GetThemeNames()
 
 // MinimumSyscGoVersion is the minimum required version of sysc-Go
-const MinimumSyscGoVersion = "1.0.1"
+const MinimumSyscGoVersion = "1.0.2"
 
 // Config represents the daemon configuration
 type Config struct {

@@ -14,6 +14,12 @@ INTEGRATION.md
 *.txt.bak
 *.txt.orig
 
+# Test and development files
+test-*.go
+test-*.service
+ascii.txt
+create_logo.py
+
 # Beads issue tracker
 .beads/beads.db
 .beads/config.json
@@ -43,6 +49,7 @@ client
 daemon
 display
 installer
+bin/
 
 # Go build artifacts
 *.exe

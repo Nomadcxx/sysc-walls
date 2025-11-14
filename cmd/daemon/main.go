@@ -574,11 +574,12 @@ func showDemoMode(daemon *Daemon, debugMode bool, sigChan chan os.Signal) {
 	// Note: decrypt, pour, and print are not yet implemented in sysc-Go
 	demoEffects := []string{
 		// Text-based effects
+		"fire-text",
 		"matrix-art",
-		"ring-text",
-		"rain-art",
-		"blackhole",
 		"beam-text",
+		"rain-art",
+		"ring-text",
+		"blackhole",
 		// Non-text effects
 		"matrix",
 		"rain",
@@ -588,7 +589,7 @@ func showDemoMode(daemon *Daemon, debugMode bool, sigChan chan os.Signal) {
 		"aquarium",
 	}
 
-	effectDuration := 30 * time.Second
+	effectDuration := 15 * time.Second
 	theme := daemon.config.GetAnimationTheme()
 
 	fmt.Println(colorSecondary.Render("Demo Configuration:"))

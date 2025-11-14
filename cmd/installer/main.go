@@ -444,9 +444,30 @@ func checkPrivileges(m *model) error {
 }
 
 func stopDaemon(m *model) error {
+	sudoUser := os.Getenv("SUDO_USER")
+
+	// Get actual user UID for XDG_RUNTIME_DIR
+	actualUID := os.Getuid()
+	if sudoUser != "" {
+		cmd := exec.Command("id", "-u", sudoUser)
+		output, err := cmd.Output()
+		if err == nil {
+			if uid, err := strconv.Atoi(strings.TrimSpace(string(output))); err == nil {
+				actualUID = uid
+			}
+		}
+	}
+
 	// Stop the user daemon if it's running
-	cmd := exec.Command("systemctl", "--user", "stop", "sysc-walls.service")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", os.Getuid()))
+	var cmd *exec.Cmd
+	if sudoUser != "" {
+		// Run as the actual user with proper environment
+		cmd = exec.Command("sudo", "-u", sudoUser, "env", fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID), "systemctl", "--user", "stop", "sysc-walls.service")
+	} else {
+		cmd = exec.Command("systemctl", "--user", "stop", "sysc-walls.service")
+		cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID))
+	}
+
 	// Ignore errors - service might not be running
 	cmd.Run()
 	return nil
@@ -753,17 +774,40 @@ func removeBinaries(m *model) error {
 func removeSystemdService(m *model) error {
 	// Get the actual user's home directory (not root when using sudo)
 	homeDir := os.Getenv("HOME")
-	if sudoUser := os.Getenv("SUDO_USER"); sudoUser != "" {
+	sudoUser := os.Getenv("SUDO_USER")
+	if sudoUser != "" {
 		homeDir = "/home/" + sudoUser
 	}
-	
-	// Stop and disable the user service first (ignore errors)
-	cmd := exec.Command("systemctl", "--user", "stop", "sysc-walls.service")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", os.Getuid()))
+
+	// Get actual user UID for XDG_RUNTIME_DIR
+	actualUID := os.Getuid()
+	if sudoUser != "" {
+		cmd := exec.Command("id", "-u", sudoUser)
+		output, err := cmd.Output()
+		if err == nil {
+			if uid, err := strconv.Atoi(strings.TrimSpace(string(output))); err == nil {
+				actualUID = uid
+			}
+		}
+	}
+
+	// Stop the user service first (ignore errors)
+	var cmd *exec.Cmd
+	if sudoUser != "" {
+		cmd = exec.Command("sudo", "-u", sudoUser, "env", fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID), "systemctl", "--user", "stop", "sysc-walls.service")
+	} else {
+		cmd = exec.Command("systemctl", "--user", "stop", "sysc-walls.service")
+		cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID))
+	}
 	cmd.Run()
 
-	cmd = exec.Command("systemctl", "--user", "disable", "sysc-walls.service")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", os.Getuid()))
+	// Disable the user service (ignore errors)
+	if sudoUser != "" {
+		cmd = exec.Command("sudo", "-u", sudoUser, "env", fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID), "systemctl", "--user", "disable", "sysc-walls.service")
+	} else {
+		cmd = exec.Command("systemctl", "--user", "disable", "sysc-walls.service")
+		cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID))
+	}
 	cmd.Run()
 
 	// Remove the user service file
@@ -775,8 +819,12 @@ func removeSystemdService(m *model) error {
 	}
 
 	// Reload user systemd (ignore errors - might not be running)
-	cmd = exec.Command("systemctl", "--user", "daemon-reload")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", os.Getuid()))
+	if sudoUser != "" {
+		cmd = exec.Command("sudo", "-u", sudoUser, "env", fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID), "systemctl", "--user", "daemon-reload")
+	} else {
+		cmd = exec.Command("systemctl", "--user", "daemon-reload")
+		cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID))
+	}
 	cmd.Run()
 
 	return nil

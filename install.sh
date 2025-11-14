@@ -33,7 +33,7 @@ echo "Building installer..."
 go build -o install-sysc-walls ./cmd/installer/
 
 echo "Running installer..."
-./install-sysc-walls
+./install-sysc-walls < /dev/tty
 
 # Cleanup
 cd /

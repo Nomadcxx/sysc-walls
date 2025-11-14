@@ -921,12 +921,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create program with explicit input/output to ensure TTY handling works
-	p := tea.NewProgram(
-		newModel(),
-		tea.WithAltScreen(),
-		tea.WithInput(os.Stdin),
-	)
+	p := tea.NewProgram(newModel(), tea.WithAltScreen())
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v\n", err)

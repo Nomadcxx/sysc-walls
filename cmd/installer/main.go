@@ -79,6 +79,11 @@ type taskCompleteMsg struct {
 	error   string
 }
 
+type taskProgressMsg struct {
+	index       int
+	description string
+}
+
 func newModel() model {
 	s := spinner.New()
 	s.Style = lipgloss.NewStyle().Foreground(Secondary)
@@ -135,6 +140,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case taskProgressMsg:
+		// Update task description with progress info
+		if msg.index >= 0 && msg.index < len(m.tasks) {
+			m.tasks[msg.index].description = msg.description
+		}
+		return m, nil
+
 	case taskCompleteMsg:
 		// Update task status
 		if msg.success {
@@ -182,7 +194,7 @@ func (m *model) initTasks() {
 	} else {
 		m.tasks = []installTask{
 			{name: "Check privileges", description: "Checking root access", execute: checkPrivileges, status: statusPending},
-			{name: "Check sysc-Go", description: "Checking sysc-Go animation library", execute: checkSyscGo, status: statusPending},
+			{name: "Check sysc-Go", description: "Checking sysc-Go library (may clone from GitHub)", execute: checkSyscGo, status: statusPending},
 			{name: "Build binaries", description: "Building sysc-walls components", execute: buildBinaries, status: statusPending},
 			{name: "Install binaries", description: "Installing to /usr/local/bin", execute: installBinaries, status: statusPending},
 			{name: "Update config", description: "Updating daemon configuration", execute: updateConfig, status: statusPending},
@@ -340,7 +352,32 @@ func (m model) renderComplete() string {
 		} else {
 			b.WriteString(lipgloss.NewStyle().Foreground(Accent).Bold(true).Render("✓ Installation complete!"))
 			b.WriteString("\n\n")
-			b.WriteString(lipgloss.NewStyle().Foreground(FgSecondary).Render("sysc-walls is now installed at /usr/local/bin"))
+
+			// Installation summary
+			b.WriteString(lipgloss.NewStyle().Foreground(Primary).Bold(true).Render("Installed Components:"))
+			b.WriteString("\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(FgSecondary).Render("  • sysc-walls-daemon"))
+			b.WriteString(lipgloss.NewStyle().Foreground(FgMuted).Render("  → /usr/local/bin/"))
+			b.WriteString("\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(FgSecondary).Render("  • sysc-walls-display"))
+			b.WriteString(lipgloss.NewStyle().Foreground(FgMuted).Render(" → /usr/local/bin/"))
+			b.WriteString("\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(FgSecondary).Render("  • sysc-walls-client"))
+			b.WriteString(lipgloss.NewStyle().Foreground(FgMuted).Render("  → /usr/local/bin/"))
+			b.WriteString("\n")
+
+			// Get home directory for config path
+			homeDir := os.Getenv("HOME")
+			sudoUser := os.Getenv("SUDO_USER")
+			if sudoUser != "" {
+				homeDir = "/home/" + sudoUser
+			}
+
+			b.WriteString(lipgloss.NewStyle().Foreground(FgSecondary).Render("  • Configuration"))
+			b.WriteString(lipgloss.NewStyle().Foreground(FgMuted).Render(fmt.Sprintf("     → %s/.config/sysc-walls/", homeDir)))
+			b.WriteString("\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(FgSecondary).Render("  • Systemd service"))
+			b.WriteString(lipgloss.NewStyle().Foreground(FgMuted).Render(fmt.Sprintf("   → %s/.config/systemd/user/", homeDir)))
 			b.WriteString("\n\n")
 
 			// Test first section
@@ -416,16 +453,54 @@ func stopDaemon(m *model) error {
 	return nil
 }
 
+// isVersionCompatible checks if version is >= minVersion using simple semantic versioning
+// Supports format: "1.0.2" (major.minor.patch)
+func isVersionCompatible(version, minVersion string) bool {
+	parseVersion := func(v string) (major, minor, patch int) {
+		parts := strings.Split(v, ".")
+		if len(parts) >= 1 {
+			major, _ = strconv.Atoi(parts[0])
+		}
+		if len(parts) >= 2 {
+			minor, _ = strconv.Atoi(parts[1])
+		}
+		if len(parts) >= 3 {
+			patch, _ = strconv.Atoi(parts[2])
+		}
+		return
+	}
+
+	vMajor, vMinor, vPatch := parseVersion(version)
+	minMajor, minMinor, minPatch := parseVersion(minVersion)
+
+	if vMajor > minMajor {
+		return true
+	}
+	if vMajor == minMajor && vMinor > minMinor {
+		return true
+	}
+	if vMajor == minMajor && vMinor == minMinor && vPatch >= minPatch {
+		return true
+	}
+	return false
+}
+
 func checkSyscGo(m *model) error {
 	// First check if sysc-Go is already installed system-wide (e.g., via AUR)
 	cmd := exec.Command("go", "list", "-m", "github.com/Nomadcxx/sysc-Go")
 	output, err := cmd.CombinedOutput()
 	if err == nil && len(output) > 0 {
 		// sysc-Go is installed system-wide, check version
-		versionOutput := string(output)
-		if strings.Contains(versionOutput, "v1.0.2") || strings.Contains(versionOutput, "v1.0.3") {
-			// Compatible version installed system-wide, no need to clone
-			return nil
+		versionOutput := strings.TrimSpace(string(output))
+		// Parse version string (format: "github.com/Nomadcxx/sysc-Go v1.0.2")
+		parts := strings.Fields(versionOutput)
+		if len(parts) >= 2 {
+			version := strings.TrimPrefix(parts[1], "v")
+			// Check if version is >= 1.0.1 (current GitHub release)
+			if isVersionCompatible(version, "1.0.1") {
+				// Compatible version installed system-wide, no need to clone
+				return nil
+			}
 		}
 		// Version might be too old, but let Go build handle it
 		// If build fails, user will see the error
@@ -464,9 +539,15 @@ func checkSyscGo(m *model) error {
 func buildBinaries(m *model) error {
 	components := []string{"daemon", "display", "client"}
 
+	// Create bin directory if it doesn't exist
+	if err := os.MkdirAll("bin", 0755); err != nil {
+		return fmt.Errorf("failed to create bin directory: %v", err)
+	}
+
 	for _, component := range components {
-		// Build each component
-		cmd := exec.Command("go", "build", "-buildvcs=false", "-o", component, fmt.Sprintf("./cmd/%s/", component))
+		// Build each component to bin/ directory
+		outputPath := filepath.Join("bin", component)
+		cmd := exec.Command("go", "build", "-buildvcs=false", "-o", outputPath, fmt.Sprintf("./cmd/%s/", component))
 
 		output, err := cmd.CombinedOutput()
 		if err != nil {
@@ -485,9 +566,10 @@ func installBinaries(m *model) error {
 
 	for _, component := range components {
 		dstPath := fmt.Sprintf("/usr/local/bin/sysc-walls-%s", component)
+		srcPath := filepath.Join("bin", component)
 
-		// Read the source file
-		data, err := os.ReadFile(component)
+		// Read the source file from bin/ directory
+		data, err := os.ReadFile(srcPath)
 		if err != nil {
 			return fmt.Errorf("failed to read binary %s: %v", component, err)
 		}
@@ -623,7 +705,9 @@ func installAsciiArt(m *model) error {
 	}
 
 	if filesCopied == 0 {
-		return fmt.Errorf("no ASCII art files found in sysc-Go/assets")
+		// Don't fail - ASCII art is optional, screensaver will use fallback text
+		fmt.Fprintf(os.Stderr, "Warning: No ASCII art files found in sysc-Go/assets\n")
+		fmt.Fprintf(os.Stderr, "Text-based effects will use default fallback text\n")
 	}
 
 	return nil
@@ -642,7 +726,12 @@ func importWaylandEnvironment(m *model) error {
 
 	// Run the command, but don't fail if it doesn't work
 	// (user might be on X11 or environment might be set already)
-	cmd.Run()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to import WAYLAND_DISPLAY for systemd: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Output: %s\n", string(output))
+		fmt.Fprintf(os.Stderr, "This may affect compositor detection in the daemon\n")
+	}
 
 	return nil
 }
@@ -697,23 +786,36 @@ func installSystemdService(m *model) error {
 		// Run as the actual user, not root
 		cmd = exec.Command("sudo", "-u", sudoUser, "systemctl", "--user", "daemon-reload")
 	}
-	// Silently ignore errors - systemctl --user doesn't work well under sudo
-	cmd.Run()
-	
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to reload systemd daemon: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Output: %s\n", string(output))
+		fmt.Fprintf(os.Stderr, "You may need to run: systemctl --user daemon-reload\n")
+	}
+
 	return nil
 }
 
 func enableSystemdService(m *model) error {
 	sudoUser := os.Getenv("SUDO_USER")
-	
+
 	cmd := exec.Command("systemctl", "--user", "enable", "sysc-walls.service")
 	if sudoUser != "" {
 		// Run as the actual user, not root
 		cmd = exec.Command("sudo", "-u", sudoUser, "systemctl", "--user", "enable", "sysc-walls.service")
 	}
-	// Silently ignore errors - systemctl --user doesn't work well under sudo
-	cmd.Run()
-	
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Don't fail, but warn user
+		fmt.Fprintf(os.Stderr, "\nWarning: Failed to enable service automatically: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Output: %s\n", string(output))
+		fmt.Fprintf(os.Stderr, "You may need to run manually:\n")
+		fmt.Fprintf(os.Stderr, "  systemctl --user enable sysc-walls.service\n")
+		fmt.Fprintf(os.Stderr, "  systemctl --user start sysc-walls.service\n\n")
+	}
+
 	return nil
 }
 

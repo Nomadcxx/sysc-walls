@@ -194,6 +194,7 @@ func (m *model) initTasks() {
 	} else {
 		m.tasks = []installTask{
 			{name: "Check privileges", description: "Checking root access", execute: checkPrivileges, status: statusPending},
+			{name: "Stop existing daemon", description: "Stopping existing sysc-walls daemon if running", execute: stopDaemon, status: statusPending, optional: true},
 			{name: "Check sysc-Go", description: "Checking sysc-Go library (cloning from GitHub if needed)", execute: checkSyscGo, status: statusPending},
 			{name: "Build binaries", description: "Building sysc-walls components", execute: buildBinaries, status: statusPending},
 			{name: "Install binaries", description: "Installing to /usr/local/bin", execute: installBinaries, status: statusPending},
@@ -527,9 +528,7 @@ func buildBinaries(m *model) error {
 func installBinaries(m *model) error {
 	components := []string{"daemon", "display", "client"}
 
-	// Stop the daemon if it's running to avoid "text file busy" error
-	stopCmd := exec.Command("systemctl", "stop", "sysc-walls.service")
-	stopCmd.Run() // Ignore errors - service might not be running
+	// Note: daemon should already be stopped by stopDaemon task before this runs
 
 	for _, component := range components {
 		dstPath := fmt.Sprintf("/usr/local/bin/sysc-walls-%s", component)

@@ -390,12 +390,18 @@ func (m model) renderComplete() string {
 			b.WriteString(lipgloss.NewStyle().Foreground(FgMuted).Render("       # Test with diagnostics"))
 			b.WriteString("\n\n")
 
-			// Then start service
+			// Then start/restart service
 			b.WriteString(lipgloss.NewStyle().Foreground(Primary).Bold(true).Render("Start the service:"))
 			b.WriteString("\n")
 			b.WriteString(lipgloss.NewStyle().Foreground(Accent).Render("  systemctl --user enable sysc-walls.service"))
 			b.WriteString("\n")
-			b.WriteString(lipgloss.NewStyle().Foreground(Accent).Render("  systemctl --user start sysc-walls.service"))
+			b.WriteString(lipgloss.NewStyle().Foreground(Accent).Render("  systemctl --user restart sysc-walls.service"))
+			b.WriteString(lipgloss.NewStyle().Foreground(FgMuted).Render("  # Use restart to reload new binaries"))
+			b.WriteString("\n\n")
+
+			// Important note about upgrades
+			b.WriteString(lipgloss.NewStyle().Foreground(WarningColor).Bold(true).Render("Note: "))
+			b.WriteString(lipgloss.NewStyle().Foreground(FgSecondary).Render("If upgrading, the daemon must be restarted to use the new binaries."))
 		}
 	}
 
@@ -469,8 +475,15 @@ func stopDaemon(m *model) error {
 		cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID))
 	}
 
-	// Ignore errors - service might not be running
+	// Try to stop the service (ignore errors - might not be installed/running)
 	cmd.Run()
+
+	// Give it a moment to stop gracefully
+	time.Sleep(500 * time.Millisecond)
+
+	// Note: We can't reliably detect if the daemon is still running on Linux
+	// because os.WriteFile will succeed even if the binary is in use (it creates
+	// a new inode). The user will be instructed to restart the service after installation.
 	return nil
 }
 

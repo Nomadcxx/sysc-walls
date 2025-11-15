@@ -162,6 +162,25 @@ func CenterLines(lines []string, width int) []string {
 	return centered
 }
 
+// CenterLinesBright centers lines and renders them in bright white for visibility
+func CenterLinesBright(lines []string, width int) []string {
+	// Bright white ANSI color
+	brightWhite := "\x1b[38;2;255;255;255m"
+	reset := "\x1b[0m"
+
+	centered := make([]string, len(lines))
+	for i, line := range lines {
+		lineLen := len([]rune(line))
+		if lineLen >= width {
+			centered[i] = brightWhite + line + reset
+		} else {
+			padding := (width - lineLen) / 2
+			centered[i] = strings.Repeat(" ", padding) + brightWhite + line + reset
+		}
+	}
+	return centered
+}
+
 // GetMaxLineWidth returns the maximum width of all lines
 func GetMaxLineWidth(lines []string) int {
 	maxWidth := 0

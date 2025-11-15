@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -66,6 +68,61 @@ func isTextBasedEffect(effect string) bool{
 	return syscGo.IsTextBasedEffect(effect)
 }
 
+// dimANSIColors reduces the intensity of ANSI RGB colors by a factor
+// factor should be between 0.0 (black) and 1.0 (original)
+func dimANSIColors(text string, factor float64) string {
+	// Match ANSI RGB color codes: \x1b[38;2;R;G;Bm
+	re := regexp.MustCompile(`\x1b\[38;2;(\d+);(\d+);(\d+)m`)
+
+	return re.ReplaceAllStringFunc(text, func(match string) string {
+		// Extract RGB values
+		parts := re.FindStringSubmatch(match)
+		if len(parts) != 4 {
+			return match
+		}
+
+		r, _ := strconv.Atoi(parts[1])
+		g, _ := strconv.Atoi(parts[2])
+		b, _ := strconv.Atoi(parts[3])
+
+		// Dim the colors
+		r = int(float64(r) * factor)
+		g = int(float64(g) * factor)
+		b = int(float64(b) * factor)
+
+		// Reconstruct ANSI code
+		return fmt.Sprintf("\x1b[38;2;%d;%d;%dm", r, g, b)
+	})
+}
+
+// dimLineRegion dims a specific region of a line (from start to end column)
+func dimLineRegion(line string, startCol, endCol int, factor float64) string {
+	// Convert to runes to handle multi-byte characters and ANSI codes
+	runes := []rune(line)
+	if startCol < 0 || startCol >= len(runes) {
+		return line
+	}
+	if endCol > len(runes) {
+		endCol = len(runes)
+	}
+
+	// Extract the region, dim it, and reconstruct
+	before := string(runes[:startCol])
+	region := string(runes[startCol:endCol])
+	after := string(runes[endCol:])
+
+	return before + dimANSIColors(region, factor) + after
+}
+
+// overlayLine overlays overlay text onto base
+// For now, just returns overlay (base is already dimmed separately)
+func overlayLine(base, overlay string, width int) string {
+	// The overlay contains bright datetime text
+	// The base is already dimmed in the calling function
+	// Simply return the overlay which will show bright text on dimmed background
+	return overlay
+}
+
 // overlayDateTime overlays date-time on animation output
 func overlayDateTime(animOutput string, width, height int, isTextBased bool) string {
 	// Get datetime lines
@@ -104,19 +161,28 @@ func overlayDateTime(animOutput string, width, height int, isTextBased bool) str
 			}
 		}
 	} else {
-		// For other effects: overlay at bottom center
+		// For non-text effects: overlay at bottom center with dimming
 		// Calculate starting position (bottom of screen, centered)
 		startLine := height - len(datetimeLines) - 2
 		if startLine < 0 {
 			startLine = 0
 		}
 
-		// Center and overlay datetime lines
-		centeredDateTime := clock.CenterLines(datetimeLines, width)
-		for i, line := range centeredDateTime {
-			if startLine+i < len(animLines) {
-				animLines[startLine+i] = line
+		// Get datetime lines with bright colors
+		centeredDateTime := clock.CenterLinesBright(datetimeLines, width)
+
+		// Dim the animation area behind datetime and overlay
+		for i, dtLine := range centeredDateTime {
+			lineIdx := startLine + i
+			if lineIdx >= len(animLines) {
+				break
 			}
+
+			// Dim the entire line where datetime will appear
+			animLines[lineIdx] = dimANSIColors(animLines[lineIdx], 0.35)
+
+			// Overlay datetime on top (character by character to preserve spacing)
+			animLines[lineIdx] = overlayLine(animLines[lineIdx], dtLine, width)
 		}
 	}
 

@@ -31,6 +31,7 @@ type Config struct {
 	animationEffect    string
 	animationTheme     string
 	animationFile      string // Custom artwork file path for text-based effects
+	animationDatetime  bool   // Show date/time overlay (only for non-text effects)
 	cycleAnimations    bool
 	terminalKitty      bool
 	terminalFullscreen bool
@@ -44,6 +45,7 @@ func NewConfig() *Config {
 		debug:              false,
 		animationEffect:    "matrix-art",
 		animationTheme:     "rama",
+		animationDatetime:  false, // datetime overlay disabled by default
 		cycleAnimations:    false,
 		terminalKitty:      true,
 		terminalFullscreen: true,
@@ -150,6 +152,10 @@ func (c *Config) parseConfigLine(key, value string) {
 			c.animationFile = expandedPath
 		} else {
 			fmt.Fprintf(os.Stderr, "Warning: Animation file path must be absolute, got '%s'. Ignoring.\n", value)
+		}
+	case "animation.datetime":
+		if boolVal, err := strconv.ParseBool(value); err == nil {
+			c.animationDatetime = boolVal
 		}
 	case "animation.cycle":
 		if boolVal, err := strconv.ParseBool(value); err == nil {
@@ -382,6 +388,11 @@ func (c *Config) GetAnimationFile() string {
 	return c.animationFile
 }
 
+// GetAnimationDatetime returns whether datetime overlay is enabled
+func (c *Config) GetAnimationDatetime() bool {
+	return c.animationDatetime
+}
+
 // SetAnimationTheme sets the animation theme with validation
 func (c *Config) SetAnimationTheme(theme string) error {
 	if !IsValidTheme(theme) {
@@ -521,6 +532,20 @@ func (c *Config) GetScreensaverCommand() (string, []string, error) {
 			return "", nil, fmt.Errorf("invalid animation file path: %s (must be absolute path in allowed directory)", file)
 		}
 		args = append(args, "--file", file)
+	}
+
+	// Add datetime overlay if enabled and compatible with effect
+	datetime := c.GetAnimationDatetime()
+	if datetime {
+		// Check if effect is text-based (datetime overlay is incompatible with text-based effects)
+		if syscGo.IsTextBasedEffect(effect) {
+			// Log warning but don't fail - just disable datetime for this launch
+			fmt.Fprintf(os.Stderr, "Warning: DateTime overlay disabled - incompatible with text-based effect '%s'\n", effect)
+			fmt.Fprintf(os.Stderr, "         DateTime only works with non-text effects like: matrix, fire, rain, aquarium, fireworks, beams\n")
+		} else {
+			// Effect is compatible, add --datetime flag
+			args = append(args, "--datetime")
+		}
 	}
 
 	args = append(args, "--fullscreen")

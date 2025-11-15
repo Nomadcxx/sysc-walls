@@ -601,8 +601,10 @@ debug = false
 effect = matrix-art
 theme = rama
 cycle = false
+datetime = false
 # ASCII art files are in ~/.config/sysc-walls/ascii/
 # Text-based effects (matrix-art, rain-art) will automatically use SYSC.txt
+# datetime overlay only works with non-text effects (matrix, fire, rain, aquarium, etc.)
 
 [terminal]
 kitty = true

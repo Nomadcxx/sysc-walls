@@ -630,6 +630,13 @@ func showDemoMode(daemon *Daemon, debugMode bool, sigChan chan os.Signal) {
 			continue
 		}
 
+		// Replace screensaver class with demo class to avoid conflict with running service
+		for i, arg := range args {
+			if arg == "sysc-walls-screensaver" {
+				args[i] = "sysc-walls-demo"
+			}
+		}
+
 		if debugMode {
 			cmdParts := append([]string{terminal}, args...)
 			fmt.Println(colorMuted.Render("  Command: " + strings.Join(cmdParts, " ")))
@@ -646,6 +653,9 @@ func showDemoMode(daemon *Daemon, debugMode bool, sigChan chan os.Signal) {
 				fmt.Println(colorMuted.Render(fmt.Sprintf("  PID: %v", pids)))
 			}
 		}
+
+		// Give Kitty time to initialize its window (especially important for first launch)
+		time.Sleep(300 * time.Millisecond)
 
 		// Wait for duration or interrupt
 		timer := time.NewTimer(effectDuration)

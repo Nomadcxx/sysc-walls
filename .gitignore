@@ -17,8 +17,10 @@ INTEGRATION.md
 # Test and development files
 test-*.go
 test-*.service
+test_*.go
 ascii.txt
 create_logo.py
+Latest.txt
 
 # Beads issue tracker
 .beads/beads.db

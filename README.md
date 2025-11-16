@@ -9,10 +9,9 @@
 
 ---
 
-<!-- Placeholder for showcase animation GIF -->
 <div align="center">
   <img src="assets/showcase.gif" alt="sysc-walls showcase" width="800">
-  <p><em>Showcase of available animations - coming soon</em></p>
+  <p><em>Showcase of available animations</em></p>
 </div>
 
 ---
@@ -185,10 +184,32 @@ debug = true
 
 For detailed troubleshooting, compositor-specific setup, and common issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
+## Roadmap
+
+**Work in Progress:**
+
+- **DateTime Effects** - Render time/date as negative space with effects filling around glyphs (fire-datetime, matrix-datetime, etc.)
+- **VOID Theme** - New dark theme with deep blacks and subtle accents
+- **Better X11 Support** - Improved compatibility beyond xprintidle, multi-monitor X11, hybrid Wayland/X11
+- **Auto-Updating** - Self-updating daemon that checks for new versions and animations
+- **More Font Options** - Additional ASCII fonts for text effects (KABEL, YES styles)
+- **Effect Cycling Improvements** - Smoother transitions, configurable cycle timing
+- **Custom Animation Parameters** - Per-effect configuration (speed, density, colors)
+- **Lock Screen Integration** - Optional integration with swaylock/hyprlock
+
+Have a feature request? Open an issue on [GitHub](https://github.com/Nomadcxx/sysc-walls/issues).
+
+## Sister Projects
+
+- **[sysc-Go](https://github.com/Nomadcxx/sysc-Go)** - Terminal animation library that powers sysc-walls effects. Includes CLI tools and interactive TUI for creating ASCII art.
+- **[sysc-greet](https://github.com/Nomadcxx/sysc-greet)** - Console greeter for greetd with sysc-Go animations and video wallpapers
+- **[moonbit](https://github.com/Nomadcxx/moonbit)** - Modern system cleaner with TUI for reclaiming disk space
+
+## Acknowledgements
+
+- [terminaltexteffects](https://github.com/ChrisBuilds/terminaltexteffects) - Inspiration for terminal visual effects
+- [sysc-Go](https://github.com/Nomadcxx/sysc-Go) - Core animation library used for all effects
+
 ## License
 
 MIT - Do whatever you want with it.
-
-## Credits
-
-Built on top of [sysc-Go](https://github.com/Nomadcxx/sysc-Go) for animations. Inspired by classic terminal screensavers but designed for modern Wayland systems.

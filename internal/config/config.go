@@ -25,16 +25,17 @@ const MinimumSyscGoVersion = "1.0.1"
 
 // Config represents the daemon configuration
 type Config struct {
-	idleTimeout        time.Duration
-	minDuration        time.Duration
-	debug              bool
-	animationEffect    string
-	animationTheme     string
-	animationFile      string // Custom artwork file path for text-based effects
-	animationDatetime  bool   // Show date/time overlay (only for non-text effects)
-	cycleAnimations    bool
-	terminalKitty      bool
-	terminalFullscreen bool
+	idleTimeout         time.Duration
+	minDuration         time.Duration
+	debug               bool
+	animationEffect     string
+	animationTheme      string
+	animationFile       string // Custom artwork file path for text-based effects
+	animationDatetime   bool   // Show date/time overlay (only for non-text effects)
+	datetimePosition    string // Position of datetime: "top", "center", "bottom"
+	cycleAnimations     bool
+	terminalKitty       bool
+	terminalFullscreen  bool
 }
 
 // NewConfig creates a new configuration instance
@@ -45,7 +46,8 @@ func NewConfig() *Config {
 		debug:              false,
 		animationEffect:    "matrix-art",
 		animationTheme:     "rama",
-		animationDatetime:  false, // datetime overlay disabled by default
+		animationDatetime:  false,    // datetime overlay disabled by default
+		datetimePosition:   "bottom", // datetime position: top, center, or bottom
 		cycleAnimations:    false,
 		terminalKitty:      true,
 		terminalFullscreen: true,
@@ -156,6 +158,18 @@ func (c *Config) parseConfigLine(key, value string) {
 	case "animation.datetime":
 		if boolVal, err := strconv.ParseBool(value); err == nil {
 			c.animationDatetime = boolVal
+		}
+	case "datetime.position":
+		// Validate position value
+		value = strings.ToLower(value)
+		if value == "top" || value == "center" || value == "centre" || value == "bottom" {
+			// Normalize "centre" to "center"
+			if value == "centre" {
+				value = "center"
+			}
+			c.datetimePosition = value
+		} else {
+			fmt.Fprintf(os.Stderr, "Warning: Invalid datetime position '%s'. Must be top, center, or bottom. Using default.\n", value)
 		}
 	case "animation.cycle":
 		if boolVal, err := strconv.ParseBool(value); err == nil {
@@ -393,6 +407,11 @@ func (c *Config) GetAnimationDatetime() bool {
 	return c.animationDatetime
 }
 
+// GetDatetimePosition returns the datetime overlay position (top, center, bottom)
+func (c *Config) GetDatetimePosition() string {
+	return c.datetimePosition
+}
+
 // SetAnimationTheme sets the animation theme with validation
 func (c *Config) SetAnimationTheme(theme string) error {
 	if !IsValidTheme(theme) {
@@ -543,8 +562,10 @@ func (c *Config) GetScreensaverCommand() (string, []string, error) {
 			fmt.Fprintf(os.Stderr, "Warning: DateTime overlay disabled - incompatible with text-based effect '%s'\n", effect)
 			fmt.Fprintf(os.Stderr, "         DateTime only works with non-text effects like: matrix, fire, rain, aquarium, fireworks, beams\n")
 		} else {
-			// Effect is compatible, add --datetime flag
+			// Effect is compatible, add --datetime flag and position
 			args = append(args, "--datetime")
+			position := c.GetDatetimePosition()
+			args = append(args, "--datetime-position", position)
 		}
 	}
 

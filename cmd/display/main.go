@@ -124,7 +124,7 @@ func overlayLine(base, overlay string, width int) string {
 }
 
 // overlayDateTime overlays date-time on animation output
-func overlayDateTime(animOutput string, width, height int, isTextBased bool) string {
+func overlayDateTime(animOutput string, width, height int, isTextBased bool, position string) string {
 	// Get datetime lines
 	datetimeLines := clock.RenderDateTime()
 
@@ -161,11 +161,29 @@ func overlayDateTime(animOutput string, width, height int, isTextBased bool) str
 			}
 		}
 	} else {
-		// For non-text effects: overlay at bottom center with dimming
-		// Calculate starting position (bottom of screen, centered)
-		startLine := height - len(datetimeLines) - 2
+		// For non-text effects: overlay with dimming at specified position
+		// Calculate starting position based on user preference
+		var startLine int
+		switch position {
+		case "top":
+			startLine = 2 // Small margin from top
+		case "center":
+			startLine = (height - len(datetimeLines)) / 2
+		case "bottom":
+			startLine = height - len(datetimeLines) - 2
+		default:
+			startLine = height - len(datetimeLines) - 2 // fallback to bottom
+		}
+
+		// Ensure we don't go out of bounds
 		if startLine < 0 {
 			startLine = 0
+		}
+		if startLine+len(datetimeLines) > len(animLines) {
+			startLine = len(animLines) - len(datetimeLines)
+			if startLine < 0 {
+				startLine = 0
+			}
 		}
 
 		// Get datetime lines with bright colors
@@ -192,13 +210,14 @@ func overlayDateTime(animOutput string, width, height int, isTextBased bool) str
 func main() {
 	// Parse command line flags
 	var (
-		effect       = flag.String("effect", "matrix", "Animation effect to display")
-		theme        = flag.String("theme", "dracula", "Color theme for animation")
-		file         = flag.String("file", "", "Text file for text-based effects")
-		datetime     = flag.Bool("datetime", false, "Show date and time overlay")
-		showVersion  = flag.Bool("version", false, "Show version information")
-		showVersionV = flag.Bool("v", false, "Show version information (shorthand)")
-		debug        = flag.Bool("debug", false, "Enable debug logging")
+		effect           = flag.String("effect", "matrix", "Animation effect to display")
+		theme            = flag.String("theme", "dracula", "Color theme for animation")
+		file             = flag.String("file", "", "Text file for text-based effects")
+		datetime         = flag.Bool("datetime", false, "Show date and time overlay")
+		datetimePosition = flag.String("datetime-position", "bottom", "Position of datetime overlay: top, center, bottom")
+		showVersion      = flag.Bool("version", false, "Show version information")
+		showVersionV     = flag.Bool("v", false, "Show version information (shorthand)")
+		debug            = flag.Bool("debug", false, "Enable debug logging")
 		noClear      = flag.Bool("no-clear", false, "Don't clear the screen before animation")
 		fullScreen   = flag.Bool("fullscreen", false, "Run in fullscreen mode")
 	)
@@ -300,7 +319,7 @@ func main() {
 
 				// Apply datetime overlay if enabled
 				if showDateTime {
-					output = overlayDateTime(output, width, height, isTextEffect)
+					output = overlayDateTime(output, width, height, isTextEffect, *datetimePosition)
 				}
 
 				// Print animation

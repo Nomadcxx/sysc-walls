@@ -41,6 +41,7 @@ func loadTextContent(customPath string, debug bool) string {
 		filepath.Join(homeDir, ".config", "sysc-walls", "ascii", "SYSC.txt"),
 		filepath.Join(homeDir, ".local", "share", "syscgo", "walls", "SYSC.txt"),
 		filepath.Join(homeDir, ".local", "share", "sysc-walls", "SYSC.txt"),
+		"/usr/share/sysc-walls/ascii/SYSC.txt", // AUR package location
 		"/usr/share/syscgo/assets/SYSC.txt",
 		"/usr/share/sysc-walls/SYSC.txt",
 		"sysc-Go/assets/SYSC.txt", // For development

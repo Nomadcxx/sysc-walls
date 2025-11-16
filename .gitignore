@@ -22,6 +22,14 @@ ascii.txt
 create_logo.py
 Latest.txt
 
+# AUR packaging (local only)
+PKGBUILD
+*.install
+*.tar.gz
+*.tar.zst
+*.pkg.tar.*
+.SRCINFO
+
 # Beads issue tracker
 .beads/beads.db
 .beads/config.json
@@ -47,10 +55,10 @@ ehthumbs.db
 Thumbs.db
 
 # Compiled binaries (development only)
-client
-daemon
-display
-installer
+/client
+/daemon
+/display
+/installer
 bin/
 
 # Go build artifacts

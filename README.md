@@ -20,6 +20,13 @@ Watches for idle activity on Wayland (or X11), then displays animations from [sy
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Nomadcxx/sysc-walls/master/install.sh | sudo bash
 ```
+### Arch Linux (AUR)
+
+```bash
+yay -S sysc-walls
+# or
+paru -S sysc-walls
+```
 
 Or **manual install:**
 ```bash

@@ -237,7 +237,7 @@ fullscreen = true     # Launch in fullscreen mode
 - `monochrome` - Black and white
 - `eldritch` - Cosmic purple/cyan
 - `dark` - Grayscale gradient
-- `transishardjob` - Trans pride colors
+- `trainsishardjob` - Custom rainbow palette
 
 ## Key Files
 

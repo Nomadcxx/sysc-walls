@@ -76,7 +76,7 @@ fullscreen = true     # Launch fullscreen
 `matrix`, `matrix-art`, `fire`, `fire-text`, `fireworks`, `rain`, `rain-art`, `beams`, `beam-text`, `aquarium`, `ring-text`, `blackhole`
 
 **Available themes:**
-`rama`, `nord`, `dracula`, `gruvbox`, `tokyo-night`, `catppuccin`, `material`, `solarized`, `monochrome`, `eldritch`, `dark`, `transishardjob`
+`rama`, `nord`, `dracula`, `gruvbox`, `tokyo-night`, `catppuccin`, `material`, `solarized`, `monochrome`, `eldritch`, `dark`, `trainsishardjob`
 
 For detailed configuration options and troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 

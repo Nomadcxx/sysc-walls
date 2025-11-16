@@ -2,16 +2,12 @@
   <img src="assets/logo.png" alt="sysc-walls">
 
   **A terminal screensaver, designed in Go and built for Wayland**
-
-  [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-  [![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go)](go.mod)
 </div>
 
 ---
 
 <div align="center">
   <img src="assets/showcase.gif" alt="sysc-walls showcase" width="800">
-  <p><em>Showcase of available animations</em></p>
 </div>
 
 ---
@@ -77,10 +73,10 @@ fullscreen = true     # Launch fullscreen
 ```
 
 **Available effects:**
-`matrix`, `matrix-art`, `fire`, `fireworks`, `rain`, `rain-art`, `beams`, `beam-text`, `aquarium`, `ring-text`, `blackhole`
+`matrix`, `matrix-art`, `fire`, `fire-text`, `fireworks`, `rain`, `rain-art`, `beams`, `beam-text`, `aquarium`, `ring-text`, `blackhole`
 
 **Available themes:**
-`rama`, `nord`, `dracula`, `gruvbox`, `tokyo-night`, `catppuccin`, `material`, `solarized`, `monochrome`, `eldritch`, `dark`, `trainsishardjob`
+`rama`, `nord`, `dracula`, `gruvbox`, `tokyo-night`, `catppuccin`, `material`, `solarized`, `monochrome`, `eldritch`, `dark`, `transishardjob`
 
 For detailed configuration options and troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
@@ -188,14 +184,14 @@ For detailed troubleshooting, compositor-specific setup, and common issues, see 
 
 **Work in Progress:**
 
-- **DateTime Effects** - Render time/date as negative space with effects filling around glyphs (fire-datetime, matrix-datetime, etc.)
-- **VOID Theme** - New dark theme with deep blacks and subtle accents
-- **Better X11 Support** - Improved compatibility beyond xprintidle, multi-monitor X11, hybrid Wayland/X11
-- **Auto-Updating** - Self-updating daemon that checks for new versions and animations
-- **More Font Options** - Additional ASCII fonts for text effects (KABEL, YES styles)
-- **Effect Cycling Improvements** - Smoother transitions, configurable cycle timing
-- **Custom Animation Parameters** - Per-effect configuration (speed, density, colors)
-- **Lock Screen Integration** - Optional integration with swaylock/hyprlock
+- [ ] **DateTime Effects** - Render time/date as negative space with effects filling around glyphs (fire-datetime, matrix-datetime, etc.)
+- [ ] **VOID Theme** - New dark theme with deep blacks and subtle accents
+- [ ] **Better X11 Support** - Improved compatibility beyond xprintidle, multi-monitor X11, hybrid Wayland/X11
+- [ ] **Auto-Updating** - Self-updating daemon that checks for new versions and animations
+- [ ] **More Font Options** - Additional ASCII fonts for text effects (KABEL, YES styles)
+- [ ] **Effect Cycling Improvements** - Smoother transitions, configurable cycle timing
+- [ ] **Custom Animation Parameters** - Per-effect configuration (speed, density, colors)
+- [ ] **Lock Screen Integration** - Optional integration with swaylock/hyprlock
 
 Have a feature request? Open an issue on [GitHub](https://github.com/Nomadcxx/sysc-walls/issues).
 

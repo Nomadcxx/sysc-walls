@@ -20,9 +20,9 @@ The installer copies all ASCII art files from sysc-Go to this directory. Text-ba
 
 1. Create or download your ASCII art file (plain text)
 2. Save it to `~/.config/sysc-walls/ascii/myart.txt`
-3. Use it with the `--text-file` flag:
+3. Use it with the `--file` flag:
    ```bash
-   /usr/local/bin/sysc-walls-display --effect matrix-art --theme rama --text-file ~/.config/sysc-walls/ascii/myart.txt
+   /usr/local/bin/sysc-walls-display --effect matrix-art --theme rama --file ~/.config/sysc-walls/ascii/myart.txt
    ```
 
 **Available ASCII art files:**
@@ -32,17 +32,23 @@ The installer copies all ASCII art files from sysc-Go to this directory. Text-ba
 
 ## Creating Custom ASCII Art
 
-Text-based effects like `matrix-art`, `rain-art`, and `blackhole` can display custom ASCII art. You can create your own art using the sysc-Go TUI tool or manually.
+Text-based effects like `matrix-art`, `rain-art`, `fire-text`, `beam-text`, `ring-text`, and `blackhole` can display custom ASCII art. You can create your own art using the sysc-Go TUI tool or manually.
 
 ### Using the sysc-Go ASCII Creator TUI
 
 The sysc-Go library includes an interactive TUI for creating and previewing ASCII art:
 
-**Build the TUI:**
+**Install sysc-Go (one-line):**
 ```bash
-cd sysc-walls/sysc-Go
-go build -o syscgo-tui ./cmd/syscgo-tui/
-./syscgo-tui
+curl -fsSL https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/install.sh | bash
+```
+
+**Or build manually:**
+```bash
+git clone https://github.com/Nomadcxx/sysc-Go.git
+cd sysc-Go
+go build -o syscgo ./cmd/syscgo/
+./syscgo
 ```
 
 **TUI Features:**
@@ -72,8 +78,8 @@ go build -o syscgo-tui ./cmd/syscgo-tui/
 4. **Save your creation:**
    - Press the export key (shown in help bar)
    - Choose export target:
-     - **sysc-Go assets** - Saves to `sysc-Go/assets/` (for development)
-     - **sysc-walls config** - Saves to `~/.config/sysc-walls/ascii/` (for immediate use)
+     - **sysc-walls config** - Saves to `~/.config/sysc-walls/ascii/` (for immediate use with sysc-walls daemon)
+     - **sysc-Go assets** - Saves to `~/.local/share/syscgo/assets/` (for use with standalone sysc-Go)
    - Enter a filename (e.g., `myart.txt`)
 
 5. **Use your ASCII art:**
@@ -124,13 +130,16 @@ Once you have your ASCII art file in `~/.config/sysc-walls/ascii/`:
 **For manual testing:**
 ```bash
 # Test with matrix-art
-/usr/local/bin/sysc-walls-display --effect matrix-art --theme rama --text-file ~/.config/sysc-walls/ascii/myart.txt
+/usr/local/bin/sysc-walls-display --effect matrix-art --theme rama --file ~/.config/sysc-walls/ascii/myart.txt
 
-# Test with rain-art
-/usr/local/bin/sysc-walls-display --effect rain-art --theme dracula --text-file ~/.config/sysc-walls/ascii/myart.txt
+# Test with fire-text
+/usr/local/bin/sysc-walls-display --effect fire-text --theme rama --file ~/.config/sysc-walls/ascii/myart.txt
 
-# Test with blackhole
-/usr/local/bin/sysc-walls-display --effect blackhole --theme nord --text-file ~/.config/sysc-walls/ascii/myart.txt
+# Test with beam-text
+/usr/local/bin/sysc-walls-display --effect beam-text --theme dracula --file ~/.config/sysc-walls/ascii/myart.txt
+
+# Test with ring-text
+/usr/local/bin/sysc-walls-display --effect ring-text --theme nord --file ~/.config/sysc-walls/ascii/myart.txt
 ```
 
 **For use with the daemon:**
@@ -153,6 +162,10 @@ The daemon currently uses `SYSC.txt` by default for all text-based effects. To u
    ```
 
 ### ASCII Art Resources
+
+**Dedicated ASCII editors:**
+- [Moebius](https://blocktronics.github.io/moebius/) - Modern ANSI/ASCII art editor with live preview
+- [REXPaint](https://www.gridsagegames.com/rexpaint/) - Powerful ASCII art editor for detailed work
 
 **Online generators:**
 - [patorjk.com](https://patorjk.com/software/taag/) - Text to ASCII Art Generator
@@ -198,14 +211,18 @@ fullscreen = true     # Launch in fullscreen mode
 - `matrix` - Classic Matrix digital rain
 - `matrix-art` - Matrix rain that crystallizes into ASCII art
 - `fire` - Animated flames
+- `fire-text` - Fire effect with ASCII art overlay
 - `fireworks` - Firework explosions
 - `rain` - Falling rain droplets
+- `rain-art` - Rain crystallizing into ASCII art
 - `beams` - Horizontal light beams
 - `beam-text` - Text revealed by scanning beams
+- `decrypt` - Text decryption animation
+- `pour` - Liquid pouring effect
 - `aquarium` - Swimming ASCII fish
-- `ring-text` - Text in circular rings
+- `print` - Typewriter text printing
 - `blackhole` - Text pulled into center vortex
-- `rain-art` - Rain crystallizing into ASCII art
+- `ring-text` - Text in circular rings
 
 ### Available Themes
 
@@ -220,7 +237,7 @@ fullscreen = true     # Launch in fullscreen mode
 - `monochrome` - Black and white
 - `eldritch` - Cosmic purple/cyan
 - `dark` - Grayscale gradient
-- `trainsishardjob` - Custom rainbow palette
+- `transishardjob` - Trans pride colors
 
 ## Key Files
 
@@ -503,7 +520,7 @@ echo $XDG_SESSION_TYPE
 
 Should output `wayland`.
 
-### X11 Fallback
+### X11 Fallback (Work-in-progress)
 
 If running on X11, the daemon automatically falls back to xprintidle for idle detection. Multi-monitor support is not available on X11.
 
@@ -519,25 +536,4 @@ sudo apt install xprintidle
 # Fedora
 sudo dnf install xprintidle
 ```
-
-## Still Having Issues?
-
-1. **Check logs thoroughly:**
-   ```bash
-   journalctl --user -u sysc-walls.service -n 100 --no-pager
-   ```
-
-2. **Test with debug mode** to see exactly what's happening
-
-3. **Verify all dependencies are installed:**
-   - Go 1.24+
-   - Kitty terminal
-   - Wayland libraries (libwayland-client)
-   - Compositor tools (niri/hyprctl/swaymsg)
-
-4. **Open an issue** on GitHub with:
-   - Output of `sysc-walls-daemon -test -debug`
-   - Relevant log excerpts
-   - Your compositor and version
-   - Your config file
 

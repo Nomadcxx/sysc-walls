@@ -173,22 +173,6 @@ systemctl --user enable sysc-walls.service
 systemctl --user start sysc-walls.service
 ```
 
-**Dependencies:**
-- Go 1.24+ ([install](https://go.dev/doc/install))
-- Wayland development libraries for [CGO bindings](pkg/idle/)
-- Kitty terminal
-
-```bash
-# Arch/Manjaro
-sudo pacman -S go wayland kitty
-
-# Debian/Ubuntu
-sudo apt install golang libwayland-dev kitty
-
-# Fedora
-sudo dnf install golang wayland-devel kitty
-```
-
 ## Architecture
 
 Three components:

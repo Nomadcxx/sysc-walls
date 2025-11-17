@@ -117,12 +117,10 @@ You can also create ASCII art manually using any text editor:
 
 **Example ASCII art structure:**
 ```
-████████████████  ████  ████  ████████████████
-████        ████  ████  ████  ████        ████
-████████████████  ████  ████  ████████████████
-▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  ▒▒▒▒  ▒▒▒▒  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+▄▀▀▀▀ █   █ ▄▀▀▀▀ ▄▀▀▀▀          ▄▀ █   █
+ ▀▀▀▄ ▀▀▀▀█  ▀▀▀▄ █     ▀▀▀▀▀  ▄▀   █ █ █
+▀▀▀▀  ▀▀▀▀▀ ▀▀▀▀   ▀▀▀▀       ▀      ▀ ▀
 ```
-
 ### Using Custom ASCII Art with Effects
 
 Once you have your ASCII art file in `~/.config/sysc-walls/ascii/`:
@@ -522,7 +520,7 @@ Should output `wayland`.
 
 ### X11 Fallback (Work-in-progress)
 
-If running on X11, the daemon automatically falls back to xprintidle for idle detection. Multi-monitor support is not available on X11.
+If running on X11, the daemon automatically falls back to xprintidle for idle detection. Multi-monitor support is not available on X11. X11 is still very much a work in progress.
 
 **Install xprintidle:**
 

@@ -23,15 +23,15 @@ import (
 	"github.com/Nomadcxx/sysc-walls/pkg/idle"
 )
 
-// Nord theme colors matching installer
+// RAMA theme colors matching installer
 var (
-	colorPrimary   = lipgloss.NewStyle().Foreground(lipgloss.Color("#00c2ff"))        // Cyan
-	colorSecondary = lipgloss.NewStyle().Foreground(lipgloss.Color("#8b95ff"))        // Purple
-	colorAccent    = lipgloss.NewStyle().Foreground(lipgloss.Color("#00ff88"))        // Green
-	colorMuted     = lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))        // Dark gray
-	colorError     = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff4d4d"))        // Red
-	colorWarning   = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffbb33"))        // Orange
-	colorBold      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00c2ff"))
+	colorPrimary   = lipgloss.NewStyle().Foreground(lipgloss.Color("#ef233c"))        // RAMA Red Pantone
+	colorSecondary = lipgloss.NewStyle().Foreground(lipgloss.Color("#d90429"))        // RAMA Fire engine red
+	colorAccent    = lipgloss.NewStyle().Foreground(lipgloss.Color("#edf2f4"))        // RAMA Anti-flash white
+	colorMuted     = lipgloss.NewStyle().Foreground(lipgloss.Color("#8d99ae"))        // RAMA Cool gray
+	colorError     = lipgloss.NewStyle().Foreground(lipgloss.Color("#d90429"))        // RAMA Fire engine red
+	colorWarning   = lipgloss.NewStyle().Foreground(lipgloss.Color("#ef233c"))        // RAMA Red Pantone
+	colorBold      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ef233c"))
 )
 
 // Daemon struct to manage screensaver lifecycle

@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -22,6 +23,29 @@ var AvailableThemes = syscGo.GetThemeNames()
 
 // MinimumSyscGoVersion is the minimum required version of sysc-Go
 const MinimumSyscGoVersion = "1.0.1"
+
+// findDisplayBinary locates sysc-walls-display in standard locations
+func findDisplayBinary() (string, error) {
+	// Try PATH first (works for both /usr/bin and /usr/local/bin)
+	if path, err := exec.LookPath("sysc-walls-display"); err == nil {
+		return path, nil
+	}
+
+	// Fallback to common locations
+	locations := []string{
+		"/usr/bin/sysc-walls-display",           // AUR/system package
+		"/usr/local/bin/sysc-walls-display",     // Manual install
+		"./sysc-walls-display",                  // Current directory (development)
+	}
+
+	for _, loc := range locations {
+		if _, err := os.Stat(loc); err == nil {
+			return loc, nil
+		}
+	}
+
+	return "", fmt.Errorf("sysc-walls-display binary not found in PATH or standard locations")
+}
 
 // Config represents the daemon configuration
 type Config struct {
@@ -540,10 +564,16 @@ func (c *Config) GetScreensaverCommand() (string, []string, error) {
 		return "", nil, fmt.Errorf("invalid animation theme: %s (contains unsafe characters)", theme)
 	}
 
+	// Find display binary
+	displayBinary, err := findDisplayBinary()
+	if err != nil {
+		return "", nil, err
+	}
+
 	// Build arguments array
 	args := c.GetTerminalArgs()
 	args = append(args, "--class", "sysc-walls-screensaver")
-	args = append(args, "/usr/local/bin/sysc-walls-display", "--effect", effect, "--theme", theme)
+	args = append(args, displayBinary, "--effect", effect, "--theme", theme)
 
 	// Add custom file path if specified and valid
 	if file != "" {

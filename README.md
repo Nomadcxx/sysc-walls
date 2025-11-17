@@ -36,12 +36,13 @@ go run cmd/installer/main.go
 ```
 
 The installer automatically:
-- Clones the [sysc-Go](https://github.com/Nomadcxx/sysc-Go) animation library
+- Downloads sysc-Go as a Go module dependency (no clone needed)
 - Builds all binaries (daemon, display, client)
 - Installs to `/usr/local/bin`
 - Sets up the systemd user service
 - Imports `WAYLAND_DISPLAY` for compositor detection
 - Backs up and updates your config with current defaults
+- Copies bundled ASCII art to `~/.config/sysc-walls/ascii/`
 
 **Test your installation first:**
 ```bash
@@ -56,6 +57,41 @@ systemctl --user start sysc-walls.service
 ```
 
 The default idle timeout is 5 minutes.
+
+## Effects Demo
+
+sysc-walls uses [sysc-Go](https://github.com/Nomadcxx/sysc-Go) for all animations. Try demo mode to cycle through all effects:
+
+```bash
+sysc-walls-daemon -demo
+```
+
+### Standalone Effects
+
+#### Fire
+![Fire Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fire.gif)
+
+#### Rain
+![ASCII Rain](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/rain.gif)
+
+#### Fireworks
+![Fireworks](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fireworks.gif)
+
+#### Beams
+![Beams Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/beams.gif)
+
+#### Aquarium
+![Aquarium Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/aquarium.gif)
+
+### Text Effects
+
+Text effects require ASCII art via the `file` config option. See [sysc-Go](https://github.com/Nomadcxx/sysc-Go) for the full text effects showcase (fire-text, matrix-art, rain-art, beam-text, ring-text, blackhole).
+
+### Available Themes
+
+`rama`, `nord`, `dracula`, `gruvbox`, `tokyo-night`, `catppuccin`, `material`, `solarized`, `monochrome`, `eldritch`, `dark`, `trainsishardjob`
+
+Want to create custom ASCII art? Install [sysc-Go](https://github.com/Nomadcxx/sysc-Go) for the interactive TUI editor with 174 block-style fonts.
 
 ## Configuration
 
@@ -101,17 +137,18 @@ go run cmd/installer/main.go
 # Clone and build
 git clone https://github.com/Nomadcxx/sysc-walls.git
 cd sysc-walls
-git clone https://github.com/Nomadcxx/sysc-Go.git
 
-go build -o daemon ./cmd/daemon/
-go build -o display ./cmd/display/
-go build -o client ./cmd/client/
+go build -o bin/sysc-walls-daemon ./cmd/daemon/
+go build -o bin/sysc-walls-display ./cmd/display/
+go build -o bin/sysc-walls-client ./cmd/client/
 
-# Install
-sudo cp daemon /usr/local/bin/sysc-walls-daemon
-sudo cp display /usr/local/bin/sysc-walls-display
-sudo cp client /usr/local/bin/sysc-walls-client
+# Install binaries
+sudo cp bin/sysc-walls-* /usr/local/bin/
 sudo chmod +x /usr/local/bin/sysc-walls-*
+
+# Copy ASCII art
+mkdir -p ~/.config/sysc-walls/ascii
+cp assets/ascii/*.txt ~/.config/sysc-walls/ascii/
 
 # Setup systemd
 mkdir -p ~/.config/systemd/user
@@ -153,7 +190,7 @@ Renders [sysc-Go](https://github.com/Nomadcxx/sysc-Go) animations in fullscreen 
 
 Optional CLI for testing. Not needed for normal operation.
 
-Config lives in `~/.config/sysc-walls/daemon.conf` (see [internal/config/](internal/config/)). Build uses local sysc-Go clone via `replace` directive - will switch to GitHub module for releases.
+Config lives in `~/.config/sysc-walls/daemon.conf` (see [internal/config/](internal/config/)). Build uses [sysc-Go](https://github.com/Nomadcxx/sysc-Go) as a proper Go module dependency (v1.0.2+).
 
 ## Testing & Debugging
 

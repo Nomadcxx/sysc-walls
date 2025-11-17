@@ -85,7 +85,22 @@ sysc-walls-daemon -demo
 
 ### Text Effects
 
-Text effects require ASCII art via the `file` config option. See [sysc-Go](https://github.com/Nomadcxx/sysc-Go) for the full text effects showcase (fire-text, matrix-art, rain-art, beam-text, ring-text, blackhole).
+Text effects require ASCII art via the `file` config option.
+
+#### Fire Text
+![Fire Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fire-text.gif)
+
+#### Rain Art
+![Rain Art Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/rain-text.gif)
+
+#### Beam Text
+![Beam Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/beam-text.gif)
+
+#### Ring Text
+![Ring Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/ring-text.gif)
+
+#### Blackhole
+![Blackhole Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/blackhole.gif)
 
 ### Available Themes
 

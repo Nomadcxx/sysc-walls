@@ -15,17 +15,17 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Theme colors - sysc-walls themed colors
+// Theme colors - RAMA theme
 var (
-	BgBase       = lipgloss.Color("#0a0e1a")
-	Primary      = lipgloss.Color("#00c2ff")
-	Secondary    = lipgloss.Color("#8b95ff")
-	Accent       = lipgloss.Color("#00ff88")
-	FgPrimary    = lipgloss.Color("#e6e6e6")
-	FgSecondary  = lipgloss.Color("#b0b0b0")
-	FgMuted      = lipgloss.Color("#666666")
-	ErrorColor   = lipgloss.Color("#ff4d4d")
-	WarningColor = lipgloss.Color("#ffbb33")
+	BgBase       = lipgloss.Color("#2b2d42")  // RAMA Space cadet
+	Primary      = lipgloss.Color("#ef233c")  // RAMA Red Pantone
+	Secondary    = lipgloss.Color("#d90429")  // RAMA Fire engine red
+	Accent       = lipgloss.Color("#edf2f4")  // RAMA Anti-flash white
+	FgPrimary    = lipgloss.Color("#edf2f4")  // RAMA Anti-flash white
+	FgSecondary  = lipgloss.Color("#8d99ae")  // RAMA Cool gray
+	FgMuted      = lipgloss.Color("#8d99ae")  // RAMA Cool gray
+	ErrorColor   = lipgloss.Color("#d90429")  // RAMA Fire engine red
+	WarningColor = lipgloss.Color("#ef233c")  // RAMA Red Pantone
 )
 
 // Styles
@@ -1157,12 +1157,14 @@ func loadASCIIHeader() []string {
 		return lines
 	}
 
-	// Fallback to embedded ASCII art - all lines same width
+	// Fallback to embedded ASCII art - SYSCWALL
 	return []string{
-		"▄▀▀▀▀ █   █ ▄▀▀▀▀ ▄▀▀▀▀          ▄▀ █   █       ",
-		" ▀▀▀▄ ▀▀▀▀█  ▀▀▀▄ █     ▀▀▀▀▀  ▄▀   █ █ █       ",
-		"▀▀▀▀  ▀▀▀▀▀ ▀▀▀▀   ▀▀▀▀       ▀      ▀ ▀        ",
-		"       TERMINAL SCREENSAVER INSTALLER            ",
+		" ▄▄▄▄▄▄▄ ▄▄    ▄▄   ▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄     ▄▄ ▄▄    ▄▄  ▄▄▄▄▄▄  ▄▄        ▄▄      ",
+		"██▀▀▀▀▀▀ ██▄  ▄██  ██▀▀▀▀▀▀ ██▀▀▀▀▀▀    ▄██ ██    ██ ██▀▀▀▀██ ██        ██      ",
+		"▀██████▄  ▀████▀   ▀██████▄ ██        ▄██▀  ██▄██▄██ ██▄▄▄▄██ ██        ██      ",
+		"▄▄▄▄▄▄██    ██     ▄▄▄▄▄▄██ ██▄▄▄▄▄▄ ██▀    ███▀▀███ ██▀▀▀▀██ ██▄▄▄▄▄▄  ██▄▄▄▄▄▄",
+		"▀▀▀▀▀▀▀     ▀▀     ▀▀▀▀▀▀▀   ▀▀▀▀▀▀▀ ▀▀     ▀▀    ▀▀ ▀▀    ▀▀ ▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀",
+		"                    TERMINAL SCREENSAVER INSTALLER                               ",
 	}
 }
 

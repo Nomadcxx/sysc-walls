@@ -172,7 +172,16 @@ func (c *Config) parseConfigLine(key, value string) {
 	case "animation.file":
 		// Expand environment variables and home directory
 		expandedPath := os.ExpandEnv(value)
-		expandedPath = strings.Replace(expandedPath, "~", os.Getenv("HOME"), 1)
+		// Only expand ~ if HOME is set and valid
+		if strings.HasPrefix(expandedPath, "~") {
+			homeDir := os.Getenv("HOME")
+			if homeDir != "" && filepath.IsAbs(homeDir) {
+				expandedPath = strings.Replace(expandedPath, "~", homeDir, 1)
+			} else {
+				fmt.Fprintf(os.Stderr, "Warning: Cannot expand '~' - HOME not set or invalid. Ignoring '%s'.\n", value)
+				break
+			}
+		}
 		// Validate that file path is absolute
 		if filepath.IsAbs(expandedPath) {
 			c.animationFile = expandedPath
@@ -211,12 +220,20 @@ func (c *Config) parseConfigLine(key, value string) {
 }
 
 // parseDuration parses a duration string (supports seconds, minutes, etc.)
+// Maximum duration is 24 hours to prevent overflow
 func parseDuration(value string) (time.Duration, error) {
+	const maxSeconds = 86400 // 24 hours max
+	const maxMinutes = 1440  // 24 hours max
+	const maxHours = 24      // 24 hours max
+
 	// Simple parser for common duration formats
 	if strings.HasSuffix(value, "s") {
 		if seconds, err := strconv.Atoi(strings.TrimSuffix(value, "s")); err == nil {
 			if seconds < 0 {
 				return 0, fmt.Errorf("duration cannot be negative: %s", value)
+			}
+			if seconds > maxSeconds {
+				return 0, fmt.Errorf("duration too large (max %ds): %s", maxSeconds, value)
 			}
 			return time.Duration(seconds) * time.Second, nil
 		}
@@ -225,12 +242,18 @@ func parseDuration(value string) (time.Duration, error) {
 			if minutes < 0 {
 				return 0, fmt.Errorf("duration cannot be negative: %s", value)
 			}
+			if minutes > maxMinutes {
+				return 0, fmt.Errorf("duration too large (max %dm): %s", maxMinutes, value)
+			}
 			return time.Duration(minutes) * time.Minute, nil
 		}
 	} else if strings.HasSuffix(value, "h") {
 		if hours, err := strconv.Atoi(strings.TrimSuffix(value, "h")); err == nil {
 			if hours < 0 {
 				return 0, fmt.Errorf("duration cannot be negative: %s", value)
+			}
+			if hours > maxHours {
+				return 0, fmt.Errorf("duration too large (max %dh): %s", maxHours, value)
 			}
 			return time.Duration(hours) * time.Hour, nil
 		}
@@ -240,6 +263,9 @@ func parseDuration(value string) (time.Duration, error) {
 	if seconds, err := strconv.Atoi(value); err == nil {
 		if seconds < 0 {
 			return 0, fmt.Errorf("duration cannot be negative: %s", value)
+		}
+		if seconds > maxSeconds {
+			return 0, fmt.Errorf("duration too large (max %ds): %s", maxSeconds, value)
 		}
 		return time.Duration(seconds) * time.Second, nil
 	}
@@ -486,11 +512,19 @@ func isSafePath(path string) bool {
 
 	// Only allow paths under user's home, /usr/share, /usr/local/share
 	homeDir := os.Getenv("HOME")
+
+	// Start with system-wide paths (always allowed)
 	allowedPrefixes := []string{
-		filepath.Join(homeDir, ".local", "share"),
-		filepath.Join(homeDir, ".config"),
 		"/usr/share",
 		"/usr/local/share",
+	}
+
+	// Only add home-based paths if HOME is set and valid
+	if homeDir != "" && filepath.IsAbs(homeDir) {
+		allowedPrefixes = append(allowedPrefixes,
+			filepath.Join(homeDir, ".local", "share"),
+			filepath.Join(homeDir, ".config"),
+		)
 	}
 
 	for _, prefix := range allowedPrefixes {

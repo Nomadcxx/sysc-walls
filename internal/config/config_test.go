@@ -28,16 +28,16 @@ func TestNewConfig(t *testing.T) {
 		t.Error("Default debug should be false")
 	}
 
-	if cfg.GetAnimationEffect() != "matrix" {
-		t.Errorf("Default effect = %s, want matrix", cfg.GetAnimationEffect())
+	if cfg.GetAnimationEffect() != "matrix-art" {
+		t.Errorf("Default effect = %s, want matrix-art", cfg.GetAnimationEffect())
 	}
 
-	if cfg.GetAnimationTheme() != "nord" {
-		t.Errorf("Default theme = %s, want nord", cfg.GetAnimationTheme())
+	if cfg.GetAnimationTheme() != "rama" {
+		t.Errorf("Default theme = %s, want rama", cfg.GetAnimationTheme())
 	}
 
-	if cfg.ShouldCycleAnimations() != true {
-		t.Error("Default cycle animations should be true")
+	if cfg.ShouldCycleAnimations() != false {
+		t.Error("Default cycle animations should be false")
 	}
 }
 
@@ -326,9 +326,9 @@ func TestGetScreensaverCommand(t *testing.T) {
 	cfg.SetAnimationEffect("matrix")
 	cfg.SetAnimationTheme("nord")
 
-	cmd := cfg.GetScreensaverCommand()
+	cmd := cfg.GetScreensaverCommandString()
 	if cmd == "" {
-		t.Error("GetScreensaverCommand() returned empty string")
+		t.Error("GetScreensaverCommandString() returned empty string")
 	}
 
 	// Verify it contains key components

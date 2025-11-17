@@ -37,15 +37,24 @@ func loadTextContent(customPath string, debug bool) string {
 
 	// Try default SYSC.txt from config directory (primary location)
 	homeDir := os.Getenv("HOME")
-	defaultPaths := []string{
-		filepath.Join(homeDir, ".config", "sysc-walls", "ascii", "SYSC.txt"),
-		filepath.Join(homeDir, ".local", "share", "syscgo", "walls", "SYSC.txt"),
-		filepath.Join(homeDir, ".local", "share", "sysc-walls", "SYSC.txt"),
+	var defaultPaths []string
+
+	// Only add home-based paths if HOME is set and valid
+	if homeDir != "" && filepath.IsAbs(homeDir) {
+		defaultPaths = append(defaultPaths,
+			filepath.Join(homeDir, ".config", "sysc-walls", "ascii", "SYSC.txt"),
+			filepath.Join(homeDir, ".local", "share", "syscgo", "walls", "SYSC.txt"),
+			filepath.Join(homeDir, ".local", "share", "sysc-walls", "SYSC.txt"),
+		)
+	}
+
+	// System-wide paths (always available)
+	defaultPaths = append(defaultPaths,
 		"/usr/share/sysc-walls/ascii/SYSC.txt", // AUR package location
 		"/usr/share/syscgo/assets/SYSC.txt",
 		"/usr/share/sysc-walls/SYSC.txt",
 		"sysc-Go/assets/SYSC.txt", // For development
-	}
+	)
 
 	for _, path := range defaultPaths {
 		if content, err := os.ReadFile(path); err == nil {

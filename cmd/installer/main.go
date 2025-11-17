@@ -250,7 +250,7 @@ func (m *model) initTasks() {
 		m.tasks = []installTask{
 			{name: "Check privileges", description: "Checking root access", execute: checkPrivileges, status: statusPending},
 			{name: "Stop existing daemon", description: "Stopping existing sysc-walls daemon if running", execute: stopDaemon, status: statusPending, optional: true},
-			{name: "Check sysc-Go", description: "Checking sysc-Go library (cloning from GitHub if needed)", execute: checkSyscGo, status: statusPending},
+			{name: "Check sysc-Go", description: "Installing sysc-go animation library (AUR or go install)", execute: checkSyscGo, status: statusPending, optional: true},
 			{name: "Build binaries", description: "Building sysc-walls components", execute: buildBinaries, status: statusPending},
 			{name: "Install binaries", description: "Installing to /usr/local/bin", execute: installBinaries, status: statusPending},
 			{name: "Update config", description: "Updating daemon configuration", execute: updateConfig, status: statusPending},
@@ -588,30 +588,95 @@ func stopDaemon(m *model) error {
 }
 
 func checkSyscGo(m *model) error {
-	// Check if local sysc-Go directory exists
-	if _, err := os.Stat("sysc-Go"); err == nil {
-		// Directory exists, check if it's a valid git repo
-		if _, err := os.Stat("sysc-Go/.git"); err == nil {
-			// Valid repo exists, pull latest
-			cmd := exec.Command("git", "pull")
-			cmd.Dir = "sysc-Go"
-			if err := cmd.Run(); err != nil {
-				// Pull failed, but repo exists, continue anyway
+	// Check if sysc-go (syscgo) binary is already available
+	if _, err := exec.LookPath("syscgo"); err == nil {
+		// Already installed
+		return nil
+	}
+
+	// Detect package manager and install sysc-go
+	packageManager := detectPackageManager()
+
+	switch packageManager {
+	case "pacman":
+		// Try AUR installation via yay/paru
+		if _, err := exec.LookPath("yay"); err == nil {
+			sudoUser := os.Getenv("SUDO_USER")
+			var cmd *exec.Cmd
+			if sudoUser != "" {
+				// yay must NOT be run as root
+				cmd = exec.Command("su", "-", sudoUser, "-c", "yay -S --noconfirm syscgo")
+			} else {
+				// If running without sudo, try directly
+				cmd = exec.Command("yay", "-S", "--noconfirm", "syscgo")
+			}
+			if output, err := cmd.CombinedOutput(); err != nil {
+				// yay failed, try go install as fallback
+				return installSyscGoWithGoInstall()
+			} else {
+				_ = output // success
 				return nil
 			}
-			return nil
+		} else if _, err := exec.LookPath("paru"); err == nil {
+			sudoUser := os.Getenv("SUDO_USER")
+			var cmd *exec.Cmd
+			if sudoUser != "" {
+				cmd = exec.Command("su", "-", sudoUser, "-c", "paru -S --noconfirm syscgo")
+			} else {
+				cmd = exec.Command("paru", "-S", "--noconfirm", "syscgo")
+			}
+			if output, err := cmd.CombinedOutput(); err != nil {
+				return installSyscGoWithGoInstall()
+			} else {
+				_ = output
+				return nil
+			}
+		} else {
+			// No AUR helper, use go install
+			return installSyscGoWithGoInstall()
 		}
-		// Directory exists but not a git repo, remove and clone
-		if err := os.RemoveAll("sysc-Go"); err != nil {
-			return fmt.Errorf("failed to remove invalid sysc-Go directory: %v", err)
+
+	default:
+		// Non-Arch systems: use go install
+		return installSyscGoWithGoInstall()
+	}
+}
+
+func detectPackageManager() string {
+	managers := map[string]string{
+		"pacman": "/usr/bin/pacman",
+		"apt":    "/usr/bin/apt",
+		"dnf":    "/usr/bin/dnf",
+	}
+
+	for name, path := range managers {
+		if _, err := os.Stat(path); err == nil {
+			return name
 		}
 	}
 
-	// Clone sysc-Go repository
-	cmd := exec.Command("git", "clone", "https://github.com/Nomadcxx/sysc-Go.git", "sysc-Go")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to clone sysc-Go: %s", string(output))
+	return "unknown"
+}
+
+func installSyscGoWithGoInstall() error {
+	// Check if Go is available
+	if _, err := exec.LookPath("go"); err != nil {
+		return fmt.Errorf("sysc-go not found and Go is not installed - please install sysc-go manually via AUR or `go install github.com/Nomadcxx/sysc-Go/cmd/syscgo@latest`")
+	}
+
+	// Install via go install (run as original user, not root)
+	sudoUser := os.Getenv("SUDO_USER")
+	var cmd *exec.Cmd
+
+	if sudoUser != "" {
+		// Run go install as the original user so it installs to their GOPATH
+		cmd = exec.Command("su", "-", sudoUser, "-c", "go install github.com/Nomadcxx/sysc-Go/cmd/syscgo@latest")
+	} else {
+		cmd = exec.Command("go", "install", "github.com/Nomadcxx/sysc-Go/cmd/syscgo@latest")
+	}
+
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to install sysc-go via go install: %s", string(output))
 	}
 
 	return nil
@@ -783,6 +848,31 @@ func updateConfig(m *model) error {
 	if sudoUser != "" && uid > 0 {
 		if err := os.Chown(asciiDir, uid, gid); err != nil {
 			return fmt.Errorf("failed to set ownership on ASCII directory: %v", err)
+		}
+	}
+
+	// Copy bundled ASCII art files to user config directory
+	asciiSourceDir := "assets/ascii"
+	if info, err := os.Stat(asciiSourceDir); err == nil && info.IsDir() {
+		entries, err := os.ReadDir(asciiSourceDir)
+		if err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".txt") {
+					srcPath := filepath.Join(asciiSourceDir, entry.Name())
+					dstPath := filepath.Join(asciiDir, entry.Name())
+
+					// Copy file
+					srcData, err := os.ReadFile(srcPath)
+					if err == nil {
+						if err := os.WriteFile(dstPath, srcData, 0644); err == nil {
+							// Set proper ownership
+							if sudoUser != "" && uid > 0 {
+								os.Chown(dstPath, uid, gid)
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 

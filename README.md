@@ -106,7 +106,7 @@ Text effects require ASCII art via the `file` config option.
 
 `rama`, `nord`, `dracula`, `gruvbox`, `tokyo-night`, `catppuccin`, `material`, `solarized`, `monochrome`, `eldritch`, `dark`, `trainsishardjob`
 
-Want to create custom ASCII art? Install [sysc-Go](https://github.com/Nomadcxx/sysc-Go) for the interactive TUI editor with 174 block-style fonts.
+For custom ASCII art, use [syscgo-tui](https://github.com/Nomadcxx/sysc-Go) to create and export text files. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for setup.
 
 ## Configuration
 

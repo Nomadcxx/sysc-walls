@@ -251,4 +251,4 @@ Have a feature request? Open an issue on [GitHub](https://github.com/Nomadcxx/sy
 
 ## License
 
-MIT - Do whatever you want with it.
+GPL-3.0

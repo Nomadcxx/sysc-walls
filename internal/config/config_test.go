@@ -365,3 +365,80 @@ func containsMiddle(s, substr string) bool {
 	}
 	return false
 }
+
+// TestCycleInterval tests cycle interval configuration
+func TestCycleInterval(t *testing.T) {
+	cfg := NewConfig()
+
+	// Check default value (5 minutes)
+	if cfg.GetCycleInterval() != 5*time.Minute {
+		t.Errorf("Default cycle interval = %v, want %v", cfg.GetCycleInterval(), 5*time.Minute)
+	}
+
+	// Test SetCycleInterval with valid values
+	tests := []struct {
+		input    string
+		expected time.Duration
+		wantErr  bool
+	}{
+		{"30s", 30 * time.Second, false},
+		{"5m", 5 * time.Minute, false},
+		{"1h", 1 * time.Hour, false},
+		{"invalid", 0, true},
+		{"0s", 0, true},
+		{"-5m", 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			err := cfg.SetCycleInterval(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("SetCycleInterval(%q) expected error, got nil", tt.input)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("SetCycleInterval(%q) unexpected error: %v", tt.input, err)
+				}
+				if cfg.GetCycleInterval() != tt.expected {
+					t.Errorf("GetCycleInterval() = %v, want %v", cfg.GetCycleInterval(), tt.expected)
+				}
+			}
+		})
+	}
+}
+
+// TestCycleIntervalLoading tests loading cycle_interval from config file
+func TestCycleIntervalLoading(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "test.conf")
+
+	// Create config with cycle_interval
+	configContent := `[idle]
+timeout = 5m
+min_duration = 30s
+
+[animation]
+effect = matrix
+theme = dracula
+cycle = true
+cycle_interval = 10m
+`
+	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test config: %v", err)
+	}
+
+	cfg := NewConfig()
+	err = cfg.LoadFromFile(configPath)
+	if err != nil {
+		t.Fatalf("LoadFromFile() failed: %v", err)
+	}
+
+	if cfg.GetCycleInterval() != 10*time.Minute {
+		t.Errorf("Loaded cycle_interval = %v, want %v", cfg.GetCycleInterval(), 10*time.Minute)
+	}
+	if !cfg.ShouldCycleAnimations() {
+		t.Error("Loaded cycle = false, want true")
+	}
+}

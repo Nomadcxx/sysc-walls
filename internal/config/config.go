@@ -58,6 +58,7 @@ type Config struct {
 	animationDatetime   bool   // Show date/time overlay (only for non-text effects)
 	datetimePosition    string // Position of datetime: "top", "center", "bottom"
 	cycleAnimations     bool
+	cycleInterval       time.Duration // How often to switch animations when cycling
 	terminalKitty       bool
 	terminalFullscreen  bool
 }
@@ -73,6 +74,7 @@ func NewConfig() *Config {
 		animationDatetime:  false,    // datetime overlay disabled by default
 		datetimePosition:   "bottom", // datetime position: top, center, or bottom
 		cycleAnimations:    false,
+		cycleInterval:      5 * time.Minute, // 5 minutes default for animation cycling
 		terminalKitty:      true,
 		terminalFullscreen: true,
 	}
@@ -208,6 +210,12 @@ func (c *Config) parseConfigLine(key, value string) {
 		if boolVal, err := strconv.ParseBool(value); err == nil {
 			c.cycleAnimations = boolVal
 		}
+	case "animation.cycle_interval":
+		if duration, err := parseDuration(value); err == nil {
+			if duration > 0 {
+				c.cycleInterval = duration
+			}
+		}
 	case "terminal.kitty":
 		if boolVal, err := strconv.ParseBool(value); err == nil {
 			c.terminalKitty = boolVal
@@ -314,6 +322,7 @@ func (c *Config) createDefaultConfig(configPath string) error {
 		fmt.Sprintf("theme = %s", c.animationTheme),
 		"# Available themes: " + strings.Join(AvailableThemes, ", "),
 		fmt.Sprintf("cycle = %t", c.cycleAnimations),
+		fmt.Sprintf("cycle_interval = %s", formatDuration(c.cycleInterval)),
 		"",
 		"[terminal]",
 		fmt.Sprintf("kitty = %t", c.terminalKitty),
@@ -383,6 +392,7 @@ func (c *Config) SaveToFile(configPath string) error {
 		fmt.Sprintf("theme = %s", c.animationTheme),
 		"# Available themes: " + strings.Join(AvailableThemes, ", "),
 		fmt.Sprintf("cycle = %t", c.cycleAnimations),
+		fmt.Sprintf("cycle_interval = %s", formatDuration(c.cycleInterval)),
 		"",
 		"[terminal]",
 		fmt.Sprintf("kitty = %t", c.terminalKitty),
@@ -539,6 +549,24 @@ func isSafePath(path string) bool {
 // ShouldCycleAnimations returns whether animations should be cycled
 func (c *Config) ShouldCycleAnimations() bool {
 	return c.cycleAnimations
+}
+
+// GetCycleInterval returns the animation cycle interval duration
+func (c *Config) GetCycleInterval() time.Duration {
+	return c.cycleInterval
+}
+
+// SetCycleInterval sets the animation cycle interval
+func (c *Config) SetCycleInterval(intervalStr string) error {
+	duration, err := parseDuration(intervalStr)
+	if err != nil {
+		return err
+	}
+	if duration <= 0 {
+		return fmt.Errorf("cycle interval must be positive")
+	}
+	c.cycleInterval = duration
+	return nil
 }
 
 // IsTerminalKitty returns whether to use kitty terminal

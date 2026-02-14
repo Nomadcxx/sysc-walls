@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -26,13 +27,13 @@ import (
 )
 
 type WaylandCGODetector struct {
-	timeout    time.Duration
-	onIdle     func()
-	onResume   func()
-	ctx        context.Context
-	cancel     context.CancelFunc
-	mu         sync.Mutex
-	initialized bool
+	timeout     time.Duration
+	onIdle      func()
+	onResume    func()
+	ctx         context.Context
+	cancel      context.CancelFunc
+	mu          sync.Mutex
+	initialized atomic.Bool
 }
 
 // Global instance for CGO callbacks
@@ -91,14 +92,14 @@ func NewWaylandCGODetector(timeout time.Duration, onIdle func(), onResume func()
 		return nil, fmt.Errorf("failed to register timeout: error code %d", ret)
 	}
 
-	detector.initialized = true
+	detector.initialized.Store(true)
 	log.Println("Wayland CGO idle detector initialized successfully")
 
 	return detector, nil
 }
 
 func (w *WaylandCGODetector) Start() error {
-	if !w.initialized {
+	if !w.initialized.Load() {
 		return fmt.Errorf("detector not initialized")
 	}
 
@@ -170,9 +171,9 @@ func (w *WaylandCGODetector) Stop() {
 
 	w.cancel()
 
-	if w.initialized {
+	if w.initialized.Load() {
 		C.wayland_cgo_cleanup()
-		w.initialized = false
+		w.initialized.Store(false)
 	}
 
 	// Clear global detector

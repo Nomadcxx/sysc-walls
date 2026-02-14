@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	evdev "github.com/gvalkov/golang-evdev"
@@ -19,6 +20,7 @@ import (
 // IdleDetector handles system idle detection
 type IdleDetector struct {
 	config      *config.Config
+	mu          sync.Mutex
 	lastActive  time.Time
 	idleTimeout time.Duration
 	idleChan    chan struct{}
@@ -53,7 +55,9 @@ func (d *IdleDetector) Events() *Events {
 // Start starts the idle detector
 func (d *IdleDetector) Start(ctx context.Context) error {
 	// Initialize last active time
+	d.mu.Lock()
 	d.lastActive = time.Now()
+	d.mu.Unlock()
 
 	log.Printf("Starting idle detector with timeout: %v", d.idleTimeout)
 
@@ -106,7 +110,9 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 
 	onResume := func() {
 		log.Println("[Go callback] Wayland resume callback invoked")
+		d.mu.Lock()
 		d.lastActive = time.Now()
+		d.mu.Unlock()
 		
 		// Fire resume event
 		select {
@@ -448,7 +454,9 @@ func (d *IdleDetector) monitorX11Idle(ctx context.Context) {
 
 // MarkActive marks the system as active (e.g., on keyboard/mouse input)
 func (d *IdleDetector) MarkActive() {
+	d.mu.Lock()
 	d.lastActive = time.Now()
+	d.mu.Unlock()
 
 	// Fire resume event if we're currently idle
 	select {
@@ -469,29 +477,6 @@ func (d *IdleDetector) MarkActive() {
 }
 
 // Helper functions
-
-// trimWhitespace removes leading and trailing whitespace
-func trimWhitespace(s string) string {
-	start := 0
-	end := len(s)
-
-	// Trim leading whitespace
-	for start < end && isWhitespace(s[start]) {
-		start++
-	}
-
-	// Trim trailing whitespace
-	for end > start && isWhitespace(s[end-1]) {
-		end--
-	}
-
-	return s[start:end]
-}
-
-// isWhitespace checks if a byte is whitespace
-func isWhitespace(b byte) bool {
-	return b == ' ' || b == '\t' || b == '\n' || b == '\r'
-}
 
 // parseInt parses an integer from a string
 func parseInt(s string) int {

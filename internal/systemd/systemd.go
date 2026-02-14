@@ -78,7 +78,11 @@ func (s *SystemD) StopScreensaver() error {
 		if s.config.IsDebug() {
 			log.Println("No tracked processes, trying pkill anyway")
 		}
-		// Fallback: try pkill
+		// Edge case fallback: Process tracking may be empty if:
+		// 1. Daemon crashed and restarted, losing track of existing processes
+		// 2. Processes were started by a different mechanism
+		// 3. Service stopped but processes lingered
+		// Use pkill as best-effort cleanup for orphaned screensaver instances
 		killCmd := exec.Command("pkill", "-f", "kitty.*--class.*sysc-walls-screensaver")
 		_ = killCmd.Run() // best-effort, ignore error
 		return nil
@@ -199,55 +203,4 @@ func (s *SystemD) GetProcessCount() int {
 	return len(s.processes)
 }
 
-// parseCommand parses a command string into arguments
-func parseCommand(command string) ([]string, error) {
-	// A very simple command parser that splits by spaces
-	// For production, consider using a more robust parser like shlex or go-shlex
-	if command == "" {
-		return nil, fmt.Errorf("empty command string")
-	}
 
-	// Split by spaces, respecting quotes
-	// This is a simple implementation, for a more robust solution use shlex or similar
-	parts := []string{}
-	current := ""
-	inQuotes := false
-	quoteChar := ""
-
-	for _, char := range command {
-		switch char {
-		case '"', '\'':
-			if !inQuotes {
-				inQuotes = true
-				quoteChar = string(char)
-			} else if string(char) == quoteChar {
-				inQuotes = false
-				quoteChar = ""
-			} else {
-				current += string(char)
-			}
-		case ' ':
-			if !inQuotes {
-				if current != "" {
-					parts = append(parts, current)
-					current = ""
-				}
-			} else {
-				current += string(char)
-			}
-		default:
-			current += string(char)
-		}
-	}
-
-	if current != "" {
-		parts = append(parts, current)
-	}
-
-	// Check if the command exists
-	if len(parts) == 0 {
-		return nil, fmt.Errorf("no command found")
-	}
-
-	return parts, nil
-}

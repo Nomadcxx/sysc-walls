@@ -159,31 +159,6 @@ func TestDetectDisplayServer(t *testing.T) {
 	}
 }
 
-// TestTrimWhitespace tests whitespace trimming
-func TestTrimWhitespace(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"hello", "hello"},
-		{" hello ", "hello"},
-		{"\thello\t", "hello"},
-		{"\n hello \n", "hello"},
-		{"  multiple   spaces  ", "multiple   spaces"},
-		{"", ""},
-		{"   ", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := trimWhitespace(tt.input)
-			if result != tt.expected {
-				t.Errorf("trimWhitespace(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
-		})
-	}
-}
-
 // TestParseInt tests integer parsing
 func TestParseInt(t *testing.T) {
 	tests := []struct {

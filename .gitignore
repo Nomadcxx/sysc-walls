@@ -187,3 +187,13 @@ coverage.txt
 # Subdirectories to ignore (embedded repos)
 hypridle/
 sysc-Go/
+
+# Backup directories
+src/
+*.bak/
+sysc-Go.bak/
+
+# Backup directories
+src/
+*.bak/
+sysc-Go.bak/

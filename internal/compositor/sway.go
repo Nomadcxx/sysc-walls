@@ -100,3 +100,14 @@ func (s *SwayCompositor) FocusOutput(name string) error {
 	}
 	return nil
 }
+
+// PrepareFullscreen is a no-op for Sway as it properly respects the terminal's
+// fullscreen request.
+func (s *SwayCompositor) PrepareFullscreen(windowClass string) error {
+	return nil
+}
+
+// CleanupFullscreen is a no-op for Sway.
+func (s *SwayCompositor) CleanupFullscreen(windowClass string) error {
+	return nil
+}

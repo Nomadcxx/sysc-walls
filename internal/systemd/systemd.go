@@ -4,10 +4,10 @@ package systemd
 import (
 	"fmt"
 	"log"
-	"os"
 	"os/exec"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/Nomadcxx/sysc-walls/internal/config"
 )
@@ -80,12 +80,7 @@ func (s *SystemD) StopScreensaver() error {
 		}
 		// Fallback: try pkill
 		killCmd := exec.Command("pkill", "-f", "kitty.*--class.*sysc-walls-screensaver")
-		if err := killCmd.Run(); err != nil {
-			return fmt.Errorf("pkill failed and no tracked processes: %w", err)
-		}
-		if s.config.IsDebug() {
-			log.Println("Killed via pkill despite no tracked processes")
-		}
+		_ = killCmd.Run() // best-effort, ignore error
 		return nil
 	}
 
@@ -93,28 +88,64 @@ func (s *SystemD) StopScreensaver() error {
 	var lastError error
 	for i, process := range s.processes {
 		if s.config.IsDebug() {
-			log.Printf("Killing process %d/%d: PID %d (output: %s)",
+			log.Printf("Stopping process %d/%d: PID %d (output: %s)",
 				i+1, len(s.processes), process.PID, process.Output)
 		}
 
-		// Try to kill the process
-		if err := process.Cmd.Process.Kill(); err != nil {
-			log.Printf("Failed to kill PID %d: %v", process.PID, err)
-			lastError = err
+		pid := process.PID
+
+		// Step 1: Send SIGTERM to process group for graceful shutdown
+		// Negative PID targets the entire process group
+		if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
+			if s.config.IsDebug() {
+				log.Printf("SIGTERM to process group -%d failed: %v, trying direct kill", pid, err)
+			}
+			// Fallback: direct kill if process group kill fails
+			_ = process.Cmd.Process.Kill()
+			process.Cmd.Wait()
 			continue
 		}
 
-		// Wait for process to finish (non-blocking check)
-		go func(cmd *exec.Cmd) {
-			cmd.Wait()
-		}(process.Cmd)
+		// Step 2: Wait up to 2s for graceful exit
+		done := make(chan error, 1)
+		go func() {
+			done <- process.Cmd.Wait()
+		}()
+
+		select {
+		case <-done:
+			// Process exited gracefully
+			if s.config.IsDebug() {
+				log.Printf("PID %d exited gracefully via SIGTERM", pid)
+			}
+		case <-time.After(2 * time.Second):
+			// Step 3: Force kill the process group
+			if s.config.IsDebug() {
+				log.Printf("PID %d did not exit after SIGTERM, sending SIGKILL", pid)
+			}
+			if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil {
+				if s.config.IsDebug() {
+					log.Printf("SIGKILL to process group -%d failed: %v", pid, err)
+				}
+				// Last resort: direct process kill
+				_ = process.Cmd.Process.Kill()
+			}
+			// Wait for process to be reaped (with timeout)
+			select {
+			case <-done:
+				// Reaped
+			case <-time.After(1 * time.Second):
+				log.Printf("WARNING: PID %d could not be reaped after SIGKILL", pid)
+				lastError = fmt.Errorf("failed to reap PID %d", pid)
+			}
+		}
 	}
 
-	// Clear all processes
+	// Clear all processes AFTER all are reaped
 	s.processes = []ScreensaverProcess{}
 
 	if s.config.IsDebug() {
-		log.Println("All screensaver processes stopped")
+		log.Println("All screensaver processes stopped and reaped")
 	}
 
 	return lastError
@@ -129,10 +160,10 @@ func (s *SystemD) IsRunning() bool {
 		return false
 	}
 
-	// Check if at least one process is still running
+	// Check if at least one process is still running via signal 0
 	stillRunning := []ScreensaverProcess{}
 	for _, process := range s.processes {
-		if err := process.Cmd.Process.Signal(os.Signal(nil)); err == nil {
+		if err := syscall.Kill(process.PID, 0); err == nil {
 			// Process is still running
 			stillRunning = append(stillRunning, process)
 		}

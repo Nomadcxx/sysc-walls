@@ -106,7 +106,9 @@ func handleSetCommand(key, value string) {
 		os.Exit(1)
 	}
 
-	cfg.SaveToFile("")
+	if err := cfg.SaveToFile(""); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to save config: %v\n", err)
+	}
 }
 
 func handleRunCommand(args []string) {
@@ -187,7 +189,10 @@ func handleStatusCommand() {
 
 	fmt.Println("\nService status:")
 	cmd := exec.Command("systemctl", "--user", "status", "sysc-walls.service")
-	output, _ := cmd.CombinedOutput()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to get service status: %v\n", err)
+	}
 	fmt.Print(string(output))
 }
 

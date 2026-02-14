@@ -290,7 +290,9 @@ func runDisplayForeground(binary string, args []string, timeout time.Duration) {
 		if cancel != nil {
 			cancel()
 		}
-		cmd.Process.Signal(syscall.SIGTERM)
+		if cmd.Process != nil {
+			cmd.Process.Signal(syscall.SIGTERM)
+		}
 	}()
 
 	if err := cmd.Run(); err != nil {

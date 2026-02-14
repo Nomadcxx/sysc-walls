@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"syscall"
 
 	"github.com/Nomadcxx/sysc-walls/internal/config"
 )
@@ -40,6 +41,9 @@ func (s *SystemD) LaunchScreensaver(terminal string, args []string, outputName s
 
 	// Create the command with validated arguments
 	cmd := exec.Command(terminal, args...)
+
+	// Create new process group so we can kill all children
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// Start the process
 	if err := cmd.Start(); err != nil {

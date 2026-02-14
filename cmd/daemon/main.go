@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -406,23 +405,8 @@ func (d *Daemon) StopScreensaver() {
 		log.Println("StopScreensaver called")
 	}
 
-	// First try systemd's tracked processes
 	if err := d.systemD.StopScreensaver(); err != nil {
-		log.Printf("SystemD stop failed: %v, trying pkill fallback", err)
-
-		// Fallback: kill by specific class name to avoid killing all kitty instances
-		killCmd := exec.Command("pkill", "-f", "kitty.*--class.*sysc-walls-screensaver")
-		if err := killCmd.Run(); err != nil {
-			log.Printf("pkill fallback also failed: %v", err)
-		} else {
-			if d.debug {
-				log.Println("Screensaver killed via pkill fallback")
-			}
-		}
-	} else {
-		if d.debug {
-			log.Println("Screensaver stopped via SystemD")
-		}
+		log.Printf("StopScreensaver error: %v", err)
 	}
 
 	if d.debug {

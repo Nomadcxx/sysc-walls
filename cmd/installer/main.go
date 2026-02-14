@@ -250,7 +250,6 @@ func (m *model) initTasks() {
 		m.tasks = []installTask{
 			{name: "Check privileges", description: "Checking root access", execute: checkPrivileges, status: statusPending},
 			{name: "Stop existing daemon", description: "Stopping existing sysc-walls daemon if running", execute: stopDaemon, status: statusPending, optional: true},
-			{name: "Check sysc-Go", description: "Installing sysc-go animation library (AUR or go install)", execute: checkSyscGo, status: statusPending, optional: true},
 			{name: "Build binaries", description: "Building sysc-walls components", execute: buildBinaries, status: statusPending},
 			{name: "Install binaries", description: "Installing to /usr/local/bin", execute: installBinaries, status: statusPending},
 			{name: "Update config", description: "Updating daemon configuration", execute: updateConfig, status: statusPending},
@@ -584,101 +583,6 @@ func stopDaemon(m *model) error {
 	// Note: We can't reliably detect if the daemon is still running on Linux
 	// because os.WriteFile will succeed even if the binary is in use (it creates
 	// a new inode). The user will be instructed to restart the service after installation.
-	return nil
-}
-
-func checkSyscGo(m *model) error {
-	// Check if sysc-go (syscgo) binary is already available
-	if _, err := exec.LookPath("syscgo"); err == nil {
-		// Already installed
-		return nil
-	}
-
-	// Detect package manager and install sysc-go
-	packageManager := detectPackageManager()
-
-	switch packageManager {
-	case "pacman":
-		// Try AUR installation via yay/paru
-		if _, err := exec.LookPath("yay"); err == nil {
-			sudoUser := os.Getenv("SUDO_USER")
-			var cmd *exec.Cmd
-			if sudoUser != "" {
-				// yay must NOT be run as root
-				cmd = exec.Command("su", "-", sudoUser, "-c", "yay -S --noconfirm syscgo")
-			} else {
-				// If running without sudo, try directly
-				cmd = exec.Command("yay", "-S", "--noconfirm", "syscgo")
-			}
-			if output, err := cmd.CombinedOutput(); err != nil {
-				// yay failed, try go install as fallback
-				return installSyscGoWithGoInstall()
-			} else {
-				_ = output // success
-				return nil
-			}
-		} else if _, err := exec.LookPath("paru"); err == nil {
-			sudoUser := os.Getenv("SUDO_USER")
-			var cmd *exec.Cmd
-			if sudoUser != "" {
-				cmd = exec.Command("su", "-", sudoUser, "-c", "paru -S --noconfirm syscgo")
-			} else {
-				cmd = exec.Command("paru", "-S", "--noconfirm", "syscgo")
-			}
-			if output, err := cmd.CombinedOutput(); err != nil {
-				return installSyscGoWithGoInstall()
-			} else {
-				_ = output
-				return nil
-			}
-		} else {
-			// No AUR helper, use go install
-			return installSyscGoWithGoInstall()
-		}
-
-	default:
-		// Non-Arch systems: use go install
-		return installSyscGoWithGoInstall()
-	}
-}
-
-func detectPackageManager() string {
-	managers := map[string]string{
-		"pacman": "/usr/bin/pacman",
-		"apt":    "/usr/bin/apt",
-		"dnf":    "/usr/bin/dnf",
-	}
-
-	for name, path := range managers {
-		if _, err := os.Stat(path); err == nil {
-			return name
-		}
-	}
-
-	return "unknown"
-}
-
-func installSyscGoWithGoInstall() error {
-	// Check if Go is available
-	if _, err := exec.LookPath("go"); err != nil {
-		return fmt.Errorf("sysc-go not found and Go is not installed - please install sysc-go manually via AUR or `go install github.com/Nomadcxx/sysc-Go/cmd/syscgo@latest`")
-	}
-
-	// Install via go install (run as original user, not root)
-	sudoUser := os.Getenv("SUDO_USER")
-	var cmd *exec.Cmd
-
-	if sudoUser != "" {
-		// Run go install as the original user so it installs to their GOPATH
-		cmd = exec.Command("su", "-", sudoUser, "-c", "go install github.com/Nomadcxx/sysc-Go/cmd/syscgo@latest")
-	} else {
-		cmd = exec.Command("go", "install", "github.com/Nomadcxx/sysc-Go/cmd/syscgo@latest")
-	}
-
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to install sysc-go via go install: %s", string(output))
-	}
-
 	return nil
 }
 

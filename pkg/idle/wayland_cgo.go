@@ -37,18 +37,25 @@ type WaylandCGODetector struct {
 
 // Global instance for CGO callbacks
 var globalDetector *WaylandCGODetector
+var globalDetectorMu sync.Mutex
 
 //export goIdleCallback
 func goIdleCallback() {
-	if globalDetector != nil && globalDetector.onIdle != nil {
-		globalDetector.onIdle()
+	globalDetectorMu.Lock()
+	detector := globalDetector
+	globalDetectorMu.Unlock()
+	if detector != nil && detector.onIdle != nil {
+		detector.onIdle()
 	}
 }
 
 //export goResumeCallback
 func goResumeCallback() {
-	if globalDetector != nil && globalDetector.onResume != nil {
-		globalDetector.onResume()
+	globalDetectorMu.Lock()
+	detector := globalDetector
+	globalDetectorMu.Unlock()
+	if detector != nil && detector.onResume != nil {
+		detector.onResume()
 	}
 }
 
@@ -64,7 +71,9 @@ func NewWaylandCGODetector(timeout time.Duration, onIdle func(), onResume func()
 	}
 
 	// Set global instance for CGO callbacks
+	globalDetectorMu.Lock()
 	globalDetector = detector
+	globalDetectorMu.Unlock()
 
 	// Initialize Wayland connection
 	ret := C.wayland_cgo_init()
@@ -167,7 +176,9 @@ func (w *WaylandCGODetector) Stop() {
 	}
 
 	// Clear global detector
+	globalDetectorMu.Lock()
 	globalDetector = nil
+	globalDetectorMu.Unlock()
 }
 
 // Keep the compiler from complaining about unused imports

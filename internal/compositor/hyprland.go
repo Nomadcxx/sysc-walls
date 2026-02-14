@@ -92,3 +92,28 @@ func (h *HyprlandCompositor) FocusOutput(name string) error {
 	}
 	return nil
 }
+
+// PrepareFullscreen adds a window rule to force fullscreen for the given window class.
+// This is needed because Hyprland may tile windows instead of respecting the terminal's
+// fullscreen request (--start-as=fullscreen in kitty).
+func (h *HyprlandCompositor) PrepareFullscreen(windowClass string) error {
+	// Add window rule to force fullscreen for windows with this class
+	// Using windowrulev2 with class matching for precise targeting
+	rule := fmt.Sprintf("fullscreen, class:(%s)", windowClass)
+	cmd := exec.Command("hyprctl", "keyword", "windowrulev2", rule)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to add fullscreen window rule: %w", err)
+	}
+	return nil
+}
+
+// CleanupFullscreen removes the fullscreen window rule for the given class.
+// Note: Hyprland doesn't have a direct "remove rule" command, but the rule
+// is harmless as it only affects windows with the specific class.
+func (h *HyprlandCompositor) CleanupFullscreen(windowClass string) error {
+	// Hyprland doesn't support removing individual rules directly.
+	// The rule we added only affects windows with the specific class,
+	// so it's safe to leave it. If needed, we could use "hyprctl reload"
+	// but that would affect all user rules, which is too disruptive.
+	return nil
+}

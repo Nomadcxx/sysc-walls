@@ -28,6 +28,15 @@ type Compositor interface {
 
 	// Name returns the compositor name
 	Name() string
+
+	// PrepareFullscreen sets up any compositor-specific rules for fullscreen
+	// windows with the given class. This is called before launching the screensaver.
+	// Returns nil if the compositor doesn't need special handling.
+	PrepareFullscreen(windowClass string) error
+
+	// CleanupFullscreen removes any compositor-specific rules added by PrepareFullscreen.
+	// This is called after stopping the screensaver.
+	CleanupFullscreen(windowClass string) error
 }
 
 // DetectCompositor detects and returns the appropriate compositor implementation

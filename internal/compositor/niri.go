@@ -98,3 +98,14 @@ func (n *NiriCompositor) FocusOutput(name string) error {
 	}
 	return nil
 }
+
+// PrepareFullscreen is a no-op for Niri as it properly respects the terminal's
+// fullscreen request.
+func (n *NiriCompositor) PrepareFullscreen(windowClass string) error {
+	return nil
+}
+
+// CleanupFullscreen is a no-op for Niri.
+func (n *NiriCompositor) CleanupFullscreen(windowClass string) error {
+	return nil
+}

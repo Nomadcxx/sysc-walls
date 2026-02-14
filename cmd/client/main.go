@@ -2,8 +2,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
 
 	"github.com/Nomadcxx/sysc-walls/internal/config"
 )
@@ -47,11 +53,11 @@ func printUsage() {
 	fmt.Printf("Usage: sysc-walls [command] [args...]\n\n")
 	fmt.Println("Commands:")
 	fmt.Println("  set <key> <value>  Set configuration values")
-	fmt.Println("  run [effect] [theme] Run screensaver display")
-	fmt.Println("  start              Start the daemon")
-	fmt.Println("  stop               Stop the daemon")
-	fmt.Println("  test [effect] [theme] Test screensaver immediately")
-	fmt.Println("  status             Check daemon status")
+	fmt.Println("  run [effect] [theme] Run screensaver display (foreground)")
+	fmt.Println("  test [effect] [theme] Test screensaver (10s preview)")
+	fmt.Println("  start              Start the daemon service")
+	fmt.Println("  stop               Stop the daemon service")
+	fmt.Println("  status             Check daemon and service status")
 	fmt.Println("  help               Show this help message")
 
 	fmt.Println("\nSet commands:")
@@ -68,7 +74,7 @@ func printUsage() {
 }
 
 func handleSetCommand(key, value string) {
-	cfg := config.NewConfig()
+	cfg := loadConfig()
 
 	switch key {
 	case "effect":
@@ -100,71 +106,75 @@ func handleSetCommand(key, value string) {
 		os.Exit(1)
 	}
 
-	cfg.SaveToFile("")
+	if err := cfg.SaveToFile(""); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to save config: %v\n", err)
+	}
 }
 
 func handleRunCommand(args []string) {
-	cfg := config.NewConfig()
+	cfg := loadConfig()
 
-	var effect, theme string
-	if len(args) >= 1 {
-		effect = args[0]
-	} else {
-		effect = cfg.GetAnimationEffect()
+	// Get display binary
+	displayBinary, err := findDisplayBinary()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
-	if len(args) >= 2 {
-		theme = args[1]
-	} else {
-		theme = cfg.GetAnimationTheme()
-	}
+	// Build command args
+	cmdArgs := buildDisplayArgs(cfg, args)
 
-	fmt.Printf("Running screensaver with effect: %s and theme: %s\n", effect, theme)
-	fmt.Println("Press Ctrl+C to stop.")
-
-	// This would launch the display component in real implementation
-	fmt.Printf("Command would be: /usr/local/bin/sysc-walls-display -effect %s -theme %s\n", effect, theme)
+	// Run in foreground
+	fmt.Printf("Running screensaver (Ctrl+C to stop)\n")
+	runDisplayForeground(displayBinary, cmdArgs, 0)
 }
 
 func handleTestCommand(args []string) {
-	cfg := config.NewConfig()
+	cfg := loadConfig()
 
-	var effect, theme string
-	if len(args) >= 1 {
-		effect = args[0]
-	} else {
-		effect = cfg.GetAnimationEffect()
+	// Get display binary
+	displayBinary, err := findDisplayBinary()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
-	if len(args) >= 2 {
-		theme = args[1]
-	} else {
-		theme = cfg.GetAnimationTheme()
-	}
+	// Build command args
+	cmdArgs := buildDisplayArgs(cfg, args)
 
-	fmt.Printf("Test mode: Starting screensaver with effect: %s and theme: %s\n", effect, theme)
-	fmt.Println("Press Ctrl+C to stop.")
-
-	// This would launch the display component in real implementation
-	fmt.Printf("Command would be: /usr/local/bin/sysc-walls-display -effect %s -theme %s -fullscreen\n", effect, theme)
+	// Run with 10 second timeout
+	fmt.Printf("Test mode: 10 second preview (Ctrl+C to stop early)\n")
+	runDisplayForeground(displayBinary, cmdArgs, 10*time.Second)
 }
 
 func handleStartCommand() {
 	fmt.Println("Starting sysc-walls daemon...")
-	fmt.Println("Use: systemctl start sysc-walls.service")
+	cmd := exec.Command("systemctl", "--user", "start", "sysc-walls.service")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to start daemon: %v\n%s\n", err, output)
+		os.Exit(1)
+	}
+	fmt.Println("Daemon started successfully")
 }
 
 func handleStopCommand() {
 	fmt.Println("Stopping sysc-walls daemon...")
-	fmt.Println("Use: systemctl stop sysc-walls.service")
+	cmd := exec.Command("systemctl", "--user", "stop", "sysc-walls.service")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to stop daemon: %v\n%s\n", err, output)
+		os.Exit(1)
+	}
+	fmt.Println("Daemon stopped successfully")
 }
 
 func handleStatusCommand() {
-	cfg := config.NewConfig()
+	cfg := loadConfig()
 
-	fmt.Println("sysc-walls status:")
-	fmt.Printf("  Animation effect: %s\n", cfg.GetAnimationEffect())
-	fmt.Printf("  Animation theme: %s\n", cfg.GetAnimationTheme())
+	fmt.Println("Configuration:")
+	fmt.Printf("  Effect: %s\n", cfg.GetAnimationEffect())
+	fmt.Printf("  Theme: %s\n", cfg.GetAnimationTheme())
 	fmt.Printf("  Idle timeout: %v\n", cfg.GetIdleTimeout())
 	if cfg.IsTerminalKitty() {
 		fmt.Println("  Terminal: kitty")
@@ -177,6 +187,120 @@ func handleStatusCommand() {
 		fmt.Println("  Display: windowed")
 	}
 
-	fmt.Println("\nSystemd service status:")
-	fmt.Println("Use: systemctl status sysc-walls.service")
+	fmt.Println("\nService status:")
+	cmd := exec.Command("systemctl", "--user", "status", "sysc-walls.service")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to get service status: %v\n", err)
+	}
+	fmt.Print(string(output))
+}
+
+// loadConfig loads the configuration from the default path
+func loadConfig() *config.Config {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to get home directory: %v\n", err)
+		os.Exit(1)
+	}
+
+	cfg := config.NewConfig()
+	configPath := filepath.Join(homeDir, ".config", "sysc-walls", "daemon.conf")
+	if err := cfg.LoadFromFile(configPath); err != nil {
+		// Use defaults if config doesn't exist
+		fmt.Fprintf(os.Stderr, "Warning: Could not load config from %s: %v\n", configPath, err)
+		fmt.Fprintf(os.Stderr, "Using default configuration\n")
+	}
+	return cfg
+}
+
+// findDisplayBinary finds the sysc-walls-display binary
+func findDisplayBinary() (string, error) {
+	// Check common locations
+	paths := []string{
+		"/usr/local/bin/sysc-walls-display",
+		"sysc-walls-display", // Check PATH
+	}
+
+	for _, path := range paths {
+		if _, err := exec.LookPath(path); err == nil {
+			return path, nil
+		}
+	}
+
+	return "", fmt.Errorf("sysc-walls-display not found in PATH or /usr/local/bin")
+}
+
+// buildDisplayArgs builds the argument list for sysc-walls-display
+func buildDisplayArgs(cfg *config.Config, overrides []string) []string {
+	effect := cfg.GetAnimationEffect()
+	theme := cfg.GetAnimationTheme()
+
+	// Override with command line args
+	if len(overrides) >= 1 {
+		effect = overrides[0]
+	}
+	if len(overrides) >= 2 {
+		theme = overrides[1]
+	}
+
+	args := []string{
+		"--effect", effect,
+		"--theme", theme,
+	}
+
+	// Add file if configured
+	if file := cfg.GetAnimationFile(); file != "" {
+		args = append(args, "--file", file)
+	}
+
+	// Add datetime if enabled
+	if cfg.GetAnimationDatetime() {
+		args = append(args, "--datetime")
+		args = append(args, "--datetime-position", cfg.GetDatetimePosition())
+	}
+
+	// Add fullscreen
+	args = append(args, "--fullscreen")
+
+	return args
+}
+
+// runDisplayForeground runs the display binary in foreground with optional timeout
+func runDisplayForeground(binary string, args []string, timeout time.Duration) {
+	ctx := context.Background()
+	var cancel context.CancelFunc
+
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
+	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	// Handle Ctrl+C gracefully
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		if cancel != nil {
+			cancel()
+		}
+		cmd.Process.Signal(syscall.SIGTERM)
+	}()
+
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			fmt.Println("\nPreview completed")
+		} else if ctx.Err() == context.Canceled {
+			fmt.Println("\nStopped by user")
+		} else {
+			fmt.Fprintf(os.Stderr, "Error running display: %v\n", err)
+			os.Exit(1)
+		}
+	}
 }

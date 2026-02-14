@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -36,13 +35,14 @@ var (
 
 // Daemon struct to manage screensaver lifecycle
 type Daemon struct {
-	config    *config.Config
-	idleTimer *time.Timer
-	ctx       context.Context
-	cancel    context.CancelFunc
-	systemD   *systemd.SystemD
-	idleDet   *idle.IdleDetector
-	debug     bool
+	config     *config.Config
+	idleTimer  *time.Timer
+	ctx        context.Context
+	cancel     context.CancelFunc
+	systemD    *systemd.SystemD
+	idleDet    *idle.IdleDetector
+	compositor compositor.Compositor
+	debug      bool
 }
 
 // NewDaemon creates a new daemon instance
@@ -190,30 +190,8 @@ func (d *Daemon) Run() {
 		log.Printf("Failed to start idle detector: %v", err)
 	}
 
-	// Start activity monitoring via xinput if available
-	d.startActivityMonitoring()
-
 	// Start main event loop
 	d.eventLoop()
-}
-
-// startActivityMonitoring starts monitoring for user activity
-func (d *Daemon) startActivityMonitoring() {
-	go func() {
-		ticker := time.NewTicker(100 * time.Millisecond) // Check every 100ms
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-d.ctx.Done():
-				return
-			case <-ticker.C:
-				// Simple activity detection - this can be enhanced
-				// For now, we'll rely on the idle detector's timing
-				// In a real implementation, this would monitor input devices
-			}
-		}
-	}()
 }
 
 // eventLoop handles all events
@@ -306,8 +284,17 @@ func (d *Daemon) LaunchScreensaver() {
 		return
 	}
 
+	// Store compositor for cleanup later
+	d.compositor = comp
+
 	if d.debug {
 		log.Printf("Detected compositor: %s", comp.Name())
+	}
+
+	// Prepare fullscreen window rules for compositor-specific handling
+	// This is needed for Hyprland which may tile windows instead of fullscreening
+	if err := comp.PrepareFullscreen("sysc-walls-screensaver"); err != nil {
+		log.Printf("Warning: Failed to prepare fullscreen rules: %v", err)
 	}
 
 	// Get all outputs
@@ -406,22 +393,14 @@ func (d *Daemon) StopScreensaver() {
 		log.Println("StopScreensaver called")
 	}
 
-	// First try systemd's tracked processes
 	if err := d.systemD.StopScreensaver(); err != nil {
-		log.Printf("SystemD stop failed: %v, trying pkill fallback", err)
+		log.Printf("StopScreensaver error: %v", err)
+	}
 
-		// Fallback: kill by specific class name to avoid killing all kitty instances
-		killCmd := exec.Command("pkill", "-f", "kitty.*--class.*sysc-walls-screensaver")
-		if err := killCmd.Run(); err != nil {
-			log.Printf("pkill fallback also failed: %v", err)
-		} else {
-			if d.debug {
-				log.Println("Screensaver killed via pkill fallback")
-			}
-		}
-	} else {
-		if d.debug {
-			log.Println("Screensaver stopped via SystemD")
+	// Clean up fullscreen window rules
+	if d.compositor != nil {
+		if err := d.compositor.CleanupFullscreen("sysc-walls-screensaver"); err != nil {
+			log.Printf("Warning: Failed to cleanup fullscreen rules: %v", err)
 		}
 	}
 

@@ -3,7 +3,7 @@ package version
 
 const (
 	// Version is the current sysc-walls version
-	Version = "1.0.0"
+	Version = "1.0.1"
 
 	// Name is the project name
 	Name = "sysc-walls"

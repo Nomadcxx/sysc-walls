@@ -3,6 +3,7 @@ opencode.json
 AGENTS.md
 AGENTS.*
 AGENTS-LLMMETA.md
+CLAUDE.md
 
 # Development and AI materials
 IMPLEMENTATION_SUMMARY.md
@@ -31,15 +32,10 @@ PKGBUILD
 .SRCINFO
 
 # Beads issue tracker
-.beads/beads.db
-.beads/config.json
-.beads/issues.jsonl
-.beads/issues.jsonl.bak
+.beads/
 
 # IDE and editor files
 .vscode/
-.vscode/settings.json
-.vscode/launch.json
 .idea/
 *.swp
 *.swo
@@ -47,14 +43,12 @@ PKGBUILD
 
 # OS generated files
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
 
-# Compiled binaries (development only)
+# Compiled binaries
 /client
 /daemon
 /display
@@ -69,8 +63,6 @@ bin/
 *.dylib
 *.test
 *.out
-*.mod
-*.sum
 
 # Test coverage
 *.cover
@@ -81,21 +73,16 @@ coverage.txt
 *.tmp
 *.temp
 *.log
-*.bak
-*~
 
 # Runtime files
 *.pid
 *.seed
 *.pid.lock
 
-# Directory specific
-node_modules/
-__pycache__/
-.pytest_cache/
+# Environment variables
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
 # AI and development tools
 .ai/
@@ -114,14 +101,6 @@ __pycache__/
 *.old
 *.save
 
-# OS and platform specific
-.DS_Store?
-ehthumbs.db
-Icon?
-Thumbs.db
-desktop.ini
-$RECYCLE.BIN/
-
 # Debugging
 *.debug
 *.debug.log
@@ -134,64 +113,18 @@ debug.log
 example.conf
 sample.conf
 
-# OS generated files
-Thumbs.db
-.DS_Store
-
-# Go build files (but not directories)
-*.exe
-*.dll
-*.so
-*.dylib
-
-# Built binaries (exact filenames only)
-/client
-/daemon
-/display
-/installer
-
-# Test binary, built with `go test -c`
-*.test
-
-# Output of the go coverage tool
-*.out
-
 # Dependency directories
 vendor/
 
 # Go workspace file
 go.work
 
-# Local configuration files
+# Local configuration
 .config/
-
-# Generated files
-*.pid
-*.seed
-*.pid.lock
-
-# Coverage directory used by tools like istanbul
-coverage.txt
-
-# nyc test coverage
-.nyc_output
-
-# Environment variables
-.env
-.env.*
-!.env.example
-
-# User configuration
-~/.config/sysc-walls/
 
 # Subdirectories to ignore (embedded repos)
 hypridle/
 sysc-Go/
-
-# Backup directories
-src/
-*.bak/
-sysc-Go.bak/
 
 # Backup directories
 src/

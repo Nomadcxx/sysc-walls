@@ -8,6 +8,17 @@ type Animation interface {
 	Resize(width, height int)
 }
 
+// TextUpdatable allows changing animation text at runtime.
+type TextUpdatable interface {
+	SetText(text string)
+}
+
+// IsTextUpdatable checks whether an animation supports runtime text updates.
+func IsTextUpdatable(anim Animation) bool {
+	_, ok := anim.(TextUpdatable)
+	return ok
+}
+
 // CreateAnimation creates an animation using direct library integration
 func CreateAnimation(effect string, width, height int, theme string) (Animation, error) {
 	// Use optimized implementation that directly calls sysc-Go library

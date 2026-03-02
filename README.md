@@ -120,7 +120,12 @@ min_duration = 30s    # Minimum time screensaver runs
 [animation]
 effect = matrix-art   # Which animation to show
 theme = rama          # Color scheme
+datetime = false      # Enable datetime display
 cycle = false         # Rotate through effects
+
+[datetime]
+position = bottom     # top, center, bottom
+interval = 1s         # Clock update interval
 
 [daemon]
 debug = false         # Enable detailed logging
@@ -189,7 +194,16 @@ Renders [sysc-Go](https://github.com/Nomadcxx/sysc-Go) animations in fullscreen 
 
 Optional CLI for testing. Not needed for normal operation.
 
-Config lives in `~/.config/sysc-walls/daemon.conf` (see [internal/config/](internal/config/)). Build uses [sysc-Go](https://github.com/Nomadcxx/sysc-Go) as a proper Go module dependency (v1.0.2+).
+Config lives in `~/.config/sysc-walls/daemon.conf` (see [internal/config/](internal/config/)). Build uses [sysc-Go](https://github.com/Nomadcxx/sysc-Go) as a proper Go module dependency (v1.0.3+).
+
+Datetime behavior:
+- Text-updatable effects (`fire-text`, `matrix-art`, `rain-art`, `beam-text`, `decrypt`, `pour`, `print`, `blackhole`, `ring-text`) render the clock as live text inside the effect.
+- Non-text effects keep the overlay fallback path.
+
+Display flags:
+- `-datetime`
+- `-datetime-position top|center|bottom`
+- `-datetime-interval 1s`
 
 ## Testing & Debugging
 
@@ -230,11 +244,6 @@ For detailed troubleshooting, compositor-specific setup, and common issues, see 
 - [ ] **DateTime Effects** - Render time/date as negative space with effects filling around glyphs (fire-datetime, matrix-datetime, etc.)
 - [ ] **VOID Theme** - New dark theme with deep blacks and subtle accents
 - [ ] **Better X11 Support** - Improved compatibility beyond xprintidle, multi-monitor X11, hybrid Wayland/X11
-- [ ] **Auto-Updating** - Self-updating daemon that checks for new versions and animations
-- [ ] **More Font Options** - Additional ASCII fonts for text effects (KABEL, YES styles)
-- [ ] **Effect Cycling Improvements** - Smoother transitions, configurable cycle timing
-- [ ] **Custom Animation Parameters** - Per-effect configuration (speed, density, colors)
-- [ ] **Lock Screen Integration** - Optional integration with swaylock/hyprlock
 
 Have a feature request? Open an issue on [GitHub](https://github.com/Nomadcxx/sysc-walls/issues).
 

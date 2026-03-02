@@ -17,6 +17,7 @@ import (
 	"github.com/Nomadcxx/sysc-walls/internal/clock"
 	"github.com/Nomadcxx/sysc-walls/internal/version"
 	"github.com/Nomadcxx/sysc-walls/pkg/utils"
+	ansiutil "github.com/charmbracelet/x/ansi"
 
 	syscGo "github.com/Nomadcxx/sysc-Go/animations"
 )
@@ -74,8 +75,109 @@ func loadTextContent(customPath string, debug bool) string {
 
 // isTextBasedEffect checks if an effect uses text content
 // Now uses sysc-Go registry instead of hardcoded list
-func isTextBasedEffect(effect string) bool{
+func isTextBasedEffect(effect string) bool {
 	return syscGo.IsTextBasedEffect(effect)
+}
+
+func normalizeDateTimePosition(position string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(position))
+	if normalized == "centre" {
+		normalized = "center"
+	}
+
+	switch normalized {
+	case "top", "center", "bottom":
+		return normalized, nil
+	default:
+		return "", fmt.Errorf("invalid datetime position %q: must be top, center, or bottom", position)
+	}
+}
+
+func supportsNativeDateTimeEffect(effect string) bool {
+	switch effect {
+	case "matrix-art", "rain-art", "beam-text":
+		return true
+	default:
+		return false
+	}
+}
+
+func datetimeOverlayBlockedEffect(effect string) bool {
+	switch effect {
+	case "fire-text":
+		return true
+	default:
+		return false
+	}
+}
+
+func maxTrimmedWidth(lines []string) int {
+	maxWidth := 0
+	for _, line := range lines {
+		w := len([]rune(strings.TrimRight(line, " ")))
+		if w > maxWidth {
+			maxWidth = w
+		}
+	}
+	return maxWidth
+}
+
+func centerLineWithinWidth(line string, width int) string {
+	lineWidth := len([]rune(line))
+	if width <= lineWidth {
+		return line
+	}
+	padding := (width - lineWidth) / 2
+	return strings.Repeat(" ", padding) + line
+}
+
+func buildFireClockMaskLines(timeStr string) []string {
+	// Reuse the canonical block glyphs from the clock package; time-only for FireText readability.
+	return clock.RenderClock(timeStr)
+}
+
+func buildClockTextForAnimation(effectName, position string) string {
+	// Keep text stable at minute granularity for text effects that rebuild on SetText.
+	now := time.Now()
+	var lines []string
+	if effectName == "fire-text" {
+		// FireText mask clarity is better with compact numeric glyphs only.
+		timeStr := now.Format("15:04")
+		lines = buildFireClockMaskLines(timeStr)
+	} else {
+		timeStr := now.Format("3:04 PM")
+		if len(timeStr) > 1 && timeStr[0] != '1' && timeStr[1] == ':' {
+			timeStr = " " + timeStr
+		}
+		clockLines := clock.RenderClock(timeStr)
+		dateStr := strings.ToUpper(now.Format("Monday, January 2, 2006"))
+		clockWidth := maxTrimmedWidth(clockLines)
+		centeredDate := centerLineWithinWidth(dateStr, clockWidth)
+		lines = make([]string, 0, len(clockLines)+2)
+		lines = append(lines, clockLines...)
+		lines = append(lines, "", centeredDate)
+	}
+
+	block := strings.Join(lines, "\n")
+	switch position {
+	case "top":
+		return block + "\n\n\n\n"
+	case "bottom":
+		return "\n\n" + block
+	default: // center
+		return block
+	}
+}
+
+func setAnimationClockText(anim animations.Animation, effectName, position string) (bool, string) {
+	tu, ok := anim.(animations.TextUpdatable)
+	if !ok {
+		return false, ""
+	}
+
+	clockText := buildClockTextForAnimation(effectName, position)
+	tu.SetText(clockText)
+	return true, clockText
 }
 
 // dimANSIColors reduces the intensity of ANSI RGB colors by a factor
@@ -127,10 +229,46 @@ func dimLineRegion(line string, startCol, endCol int, factor float64) string {
 // overlayLine overlays overlay text onto base
 // For now, just returns overlay (base is already dimmed separately)
 func overlayLine(base, overlay string, width int) string {
-	// The overlay contains bright datetime text
-	// The base is already dimmed in the calling function
-	// Simply return the overlay which will show bright text on dimmed background
-	return overlay
+	if ansiutil.StringWidth(base) < width {
+		base += strings.Repeat(" ", width-ansiutil.StringWidth(base))
+	}
+
+	overlayPlain := []rune(ansiutil.Strip(overlay))
+	if len(overlayPlain) < width {
+		overlayPlain = append(overlayPlain, []rune(strings.Repeat(" ", width-len(overlayPlain)))...)
+	}
+	if len(overlayPlain) > width {
+		overlayPlain = overlayPlain[:width]
+	}
+
+	const brightWhite = "\x1b[38;2;255;255;255m"
+	const reset = "\x1b[0m"
+
+	var out strings.Builder
+	last := 0
+	for i := 0; i < width; {
+		for i < width && overlayPlain[i] == ' ' {
+			i++
+		}
+		if i >= width {
+			break
+		}
+
+		start := i
+		for i < width && overlayPlain[i] != ' ' {
+			i++
+		}
+		end := i
+
+		out.WriteString(ansiutil.Cut(base, last, start))
+		out.WriteString(brightWhite)
+		out.WriteString(string(overlayPlain[start:end]))
+		out.WriteString(reset)
+		last = end
+	}
+
+	out.WriteString(ansiutil.Cut(base, last, width))
+	return out.String()
 }
 
 // overlayDateTime overlays date-time on animation output
@@ -206,10 +344,7 @@ func overlayDateTime(animOutput string, width, height int, isTextBased bool, pos
 				break
 			}
 
-			// Dim the entire line where datetime will appear
-			animLines[lineIdx] = dimANSIColors(animLines[lineIdx], 0.35)
-
-			// Overlay datetime on top (character by character to preserve spacing)
+			// Overlay datetime without replacing the full line.
 			animLines[lineIdx] = overlayLine(animLines[lineIdx], dtLine, width)
 		}
 	}
@@ -225,11 +360,12 @@ func main() {
 		file             = flag.String("file", "", "Text file for text-based effects")
 		datetime         = flag.Bool("datetime", false, "Show date and time overlay")
 		datetimePosition = flag.String("datetime-position", "bottom", "Position of datetime overlay: top, center, bottom")
+		datetimeInterval = flag.Duration("datetime-interval", time.Second, "How often datetime updates (e.g. 1s, 2s)")
 		showVersion      = flag.Bool("version", false, "Show version information")
 		showVersionV     = flag.Bool("v", false, "Show version information (shorthand)")
 		debug            = flag.Bool("debug", false, "Enable debug logging")
-		noClear      = flag.Bool("no-clear", false, "Don't clear the screen before animation")
-		fullScreen   = flag.Bool("fullscreen", false, "Run in fullscreen mode")
+		noClear          = flag.Bool("no-clear", false, "Don't clear the screen before animation")
+		fullScreen       = flag.Bool("fullscreen", false, "Run in fullscreen mode")
 	)
 	flag.Parse()
 
@@ -237,6 +373,16 @@ func main() {
 	if *showVersion || *showVersionV {
 		fmt.Printf("%s\n", version.GetFullVersion())
 		os.Exit(0)
+	}
+
+	normalizedDateTimePosition, err := normalizeDateTimePosition(*datetimePosition)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	if *datetimeInterval <= 0 {
+		fmt.Fprintf(os.Stderr, "Error: datetime-interval must be greater than 0, got %v\n", *datetimeInterval)
+		os.Exit(1)
 	}
 
 	// If fullscreen is requested, give terminal time to resize
@@ -259,7 +405,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Retry %d: size=%dx%d\n", i+1, width, height)
 		}
 	}
-	
+
 	if *debug {
 		fmt.Fprintf(os.Stderr, "Final terminal size: %dx%d\n", width, height)
 	}
@@ -271,13 +417,14 @@ func main() {
 	defer utils.RestoreTerminal()
 
 	// Load text content for text-based effects
+	activeEffect := *effect
 	var textContent string
-	if isTextBasedEffect(*effect) {
+	if isTextBasedEffect(activeEffect) && !(*datetime && supportsNativeDateTimeEffect(activeEffect)) {
 		textContent = loadTextContent(*file, *debug)
 	}
 
 	// Create animation based on effect
-	anim, err := animations.CreateAnimationWithText(*effect, width, height, *theme, textContent)
+	anim, err := animations.CreateAnimationWithText(activeEffect, width, height, *theme, textContent)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating animation: %v\n", err)
 		os.Exit(1)
@@ -301,14 +448,35 @@ func main() {
 
 	// Store values for use in goroutine
 	showDateTime := *datetime
-	effectName := *effect
-	isTextEffect := isTextBasedEffect(effectName)
+	if showDateTime && datetimeOverlayBlockedEffect(activeEffect) {
+		fmt.Fprintf(os.Stderr, "Warning: datetime is disabled for effect '%s'.\n", activeEffect)
+		showDateTime = false
+	}
+	datetimeViaText := showDateTime && supportsNativeDateTimeEffect(activeEffect) && animations.IsTextUpdatable(anim)
+	lastClockText := ""
+
+	var clockTicker *time.Ticker
+	var clockTickerChan <-chan time.Time
+	if datetimeViaText {
+		clockTicker = time.NewTicker(*datetimeInterval)
+		clockTickerChan = clockTicker.C
+		defer clockTicker.Stop()
+
+		_, clockText := setAnimationClockText(anim, activeEffect, normalizedDateTimePosition)
+		lastClockText = clockText
+	}
 
 	if *debug {
-		fmt.Printf("Starting animation: %s with theme %s\n", *effect, *theme)
+		fmt.Printf("Starting animation: %s with theme %s\n", activeEffect, *theme)
+		if activeEffect != *effect {
+			fmt.Printf("Requested effect: %s\n", *effect)
+		}
 		fmt.Printf("Terminal size: %dx%d\n", width, height)
 		fmt.Printf("Duration: infinite (screensaver mode)\n")
 		fmt.Printf("DateTime overlay: %v\n", showDateTime)
+		fmt.Printf("DateTime mode: %s\n", map[bool]string{true: "native-text", false: "overlay"}[datetimeViaText])
+		fmt.Printf("DateTime position: %s\n", normalizedDateTimePosition)
+		fmt.Printf("DateTime interval: %v\n", *datetimeInterval)
 	}
 
 	// Animation goroutine
@@ -328,8 +496,8 @@ func main() {
 				output := anim.Render()
 
 				// Apply datetime overlay if enabled
-				if showDateTime {
-					output = overlayDateTime(output, width, height, isTextEffect, *datetimePosition)
+				if showDateTime && !datetimeViaText {
+					output = overlayDateTime(output, width, height, false, normalizedDateTimePosition)
 				}
 
 				// Print animation
@@ -339,6 +507,12 @@ func main() {
 				fmt.Print("\033[H")
 
 				frame++
+			case <-clockTickerChan:
+				clockText := buildClockTextForAnimation(activeEffect, normalizedDateTimePosition)
+				if clockText != lastClockText {
+					setAnimationClockText(anim, activeEffect, normalizedDateTimePosition)
+					lastClockText = clockText
+				}
 			case <-c:
 				// Received interrupt or termination signal
 				if *debug {
@@ -359,6 +533,10 @@ func main() {
 						}
 						width, height = newWidth, newHeight
 						anim.Resize(width, height)
+						if datetimeViaText {
+							_, clockText := setAnimationClockText(anim, activeEffect, normalizedDateTimePosition)
+							lastClockText = clockText
+						}
 					}
 				}
 			}

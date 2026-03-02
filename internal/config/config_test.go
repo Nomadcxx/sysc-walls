@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -34,6 +35,18 @@ func TestNewConfig(t *testing.T) {
 
 	if cfg.GetAnimationTheme() != "rama" {
 		t.Errorf("Default theme = %s, want rama", cfg.GetAnimationTheme())
+	}
+
+	if cfg.GetAnimationDatetime() {
+		t.Error("Default datetime should be false")
+	}
+
+	if cfg.GetDatetimePosition() != "bottom" {
+		t.Errorf("Default datetime position = %s, want bottom", cfg.GetDatetimePosition())
+	}
+
+	if cfg.GetDatetimeInterval() != time.Second {
+		t.Errorf("Default datetime interval = %v, want %v", cfg.GetDatetimeInterval(), time.Second)
 	}
 
 	if cfg.ShouldCycleAnimations() != false {
@@ -190,7 +203,12 @@ debug = true
 [animation]
 effect = fire
 theme = gruvbox
+datetime = true
 cycle = false
+
+[datetime]
+position = top
+interval = 2s
 
 [terminal]
 kitty = false
@@ -223,6 +241,15 @@ fullscreen = false
 	if cfg2.GetAnimationTheme() != "gruvbox" {
 		t.Errorf("Loaded theme = %s, want gruvbox", cfg2.GetAnimationTheme())
 	}
+	if !cfg2.GetAnimationDatetime() {
+		t.Error("Loaded datetime = false, want true")
+	}
+	if cfg2.GetDatetimePosition() != "top" {
+		t.Errorf("Loaded datetime position = %s, want top", cfg2.GetDatetimePosition())
+	}
+	if cfg2.GetDatetimeInterval() != 2*time.Second {
+		t.Errorf("Loaded datetime interval = %v, want 2s", cfg2.GetDatetimeInterval())
+	}
 	if cfg2.ShouldCycleAnimations() {
 		t.Error("Loaded cycle = true, want false")
 	}
@@ -244,6 +271,9 @@ func TestSaveToFile(t *testing.T) {
 	cfg.SetDebug(true)
 	cfg.SetAnimationEffect("rain")
 	cfg.SetAnimationTheme("tokyo-night")
+	cfg.parseConfigLine("animation.datetime", "true")
+	cfg.parseConfigLine("datetime.position", "center")
+	cfg.parseConfigLine("datetime.interval", "3s")
 
 	err := cfg.SaveToFile(configPath)
 	if err != nil {
@@ -273,6 +303,15 @@ func TestSaveToFile(t *testing.T) {
 	}
 	if cfg2.GetAnimationTheme() != "tokyo-night" {
 		t.Errorf("Saved/loaded theme = %s, want tokyo-night", cfg2.GetAnimationTheme())
+	}
+	if !cfg2.GetAnimationDatetime() {
+		t.Error("Saved/loaded datetime = false, want true")
+	}
+	if cfg2.GetDatetimePosition() != "center" {
+		t.Errorf("Saved/loaded datetime position = %s, want center", cfg2.GetDatetimePosition())
+	}
+	if cfg2.GetDatetimeInterval() != 3*time.Second {
+		t.Errorf("Saved/loaded datetime interval = %v, want 3s", cfg2.GetDatetimeInterval())
 	}
 }
 
@@ -325,6 +364,19 @@ func TestGetScreensaverCommand(t *testing.T) {
 	cfg := NewConfig()
 	cfg.SetAnimationEffect("matrix")
 	cfg.SetAnimationTheme("nord")
+	cfg.parseConfigLine("animation.datetime", "true")
+	cfg.parseConfigLine("datetime.position", "top")
+	cfg.parseConfigLine("datetime.interval", "2s")
+
+	// Use a fake display binary in PATH so this test doesn't depend on host install.
+	tmpDir := t.TempDir()
+	fakeDisplay := filepath.Join(tmpDir, "sysc-walls-display")
+	if err := os.WriteFile(fakeDisplay, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatalf("failed to write fake display binary: %v", err)
+	}
+
+	oldPath := os.Getenv("PATH")
+	t.Setenv("PATH", tmpDir+string(os.PathListSeparator)+oldPath)
 
 	cmd := cfg.GetScreensaverCommandString()
 	if cmd == "" {
@@ -332,38 +384,99 @@ func TestGetScreensaverCommand(t *testing.T) {
 	}
 
 	// Verify it contains key components
-	if !contains(cmd, "kitty") {
+	if !strings.Contains(cmd, "kitty") {
 		t.Errorf("Command missing 'kitty': %s", cmd)
 	}
-	if !contains(cmd, "sysc-walls-display") {
+	if !strings.Contains(cmd, "sysc-walls-display") {
 		t.Errorf("Command missing 'sysc-walls-display': %s", cmd)
 	}
-	if !contains(cmd, "--effect") {
+	if !strings.Contains(cmd, "--effect") {
 		t.Errorf("Command missing '--effect': %s", cmd)
 	}
-	if !contains(cmd, "matrix") {
+	if !strings.Contains(cmd, "matrix") {
 		t.Errorf("Command missing 'matrix': %s", cmd)
 	}
-	if !contains(cmd, "--theme") {
+	if !strings.Contains(cmd, "--theme") {
 		t.Errorf("Command missing '--theme': %s", cmd)
 	}
-	if !contains(cmd, "nord") {
+	if !strings.Contains(cmd, "nord") {
 		t.Errorf("Command missing 'nord': %s", cmd)
 	}
-}
-
-// Helper function
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsMiddle(s, substr)))
-}
-
-func containsMiddle(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
+	if !strings.Contains(cmd, "--datetime") {
+		t.Errorf("Command missing '--datetime': %s", cmd)
 	}
-	return false
+	if !strings.Contains(cmd, "--datetime-position top") {
+		t.Errorf("Command missing '--datetime-position top': %s", cmd)
+	}
+	if !strings.Contains(cmd, "--datetime-interval 2s") {
+		t.Errorf("Command missing '--datetime-interval 2s': %s", cmd)
+	}
+}
+
+func TestGetScreensaverCommandFireTextDisablesDatetime(t *testing.T) {
+	cfg := NewConfig()
+	cfg.SetAnimationEffect("fire-text")
+	cfg.SetAnimationTheme("nord")
+	cfg.parseConfigLine("animation.datetime", "true")
+	cfg.parseConfigLine("datetime.position", "top")
+	cfg.parseConfigLine("datetime.interval", "2s")
+
+	// Use a fake display binary in PATH so this test doesn't depend on host install.
+	tmpDir := t.TempDir()
+	fakeDisplay := filepath.Join(tmpDir, "sysc-walls-display")
+	if err := os.WriteFile(fakeDisplay, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatalf("failed to write fake display binary: %v", err)
+	}
+
+	oldPath := os.Getenv("PATH")
+	t.Setenv("PATH", tmpDir+string(os.PathListSeparator)+oldPath)
+
+	cmd := cfg.GetScreensaverCommandString()
+	if cmd == "" {
+		t.Error("GetScreensaverCommandString() returned empty string")
+	}
+
+	if strings.Contains(cmd, "--datetime") {
+		t.Errorf("Command should not include '--datetime' for fire-text: %s", cmd)
+	}
+	if strings.Contains(cmd, "--datetime-position") {
+		t.Errorf("Command should not include '--datetime-position' for fire-text: %s", cmd)
+	}
+	if strings.Contains(cmd, "--datetime-interval") {
+		t.Errorf("Command should not include '--datetime-interval' for fire-text: %s", cmd)
+	}
+}
+
+func TestGetScreensaverCommandBeamTextAllowsDatetime(t *testing.T) {
+	cfg := NewConfig()
+	cfg.SetAnimationEffect("beam-text")
+	cfg.SetAnimationTheme("nord")
+	cfg.parseConfigLine("animation.datetime", "true")
+	cfg.parseConfigLine("datetime.position", "center")
+	cfg.parseConfigLine("datetime.interval", "2s")
+
+	tmpDir := t.TempDir()
+	fakeDisplay := filepath.Join(tmpDir, "sysc-walls-display")
+	if err := os.WriteFile(fakeDisplay, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatalf("failed to write fake display binary: %v", err)
+	}
+
+	oldPath := os.Getenv("PATH")
+	t.Setenv("PATH", tmpDir+string(os.PathListSeparator)+oldPath)
+
+	cmd := cfg.GetScreensaverCommandString()
+	if cmd == "" {
+		t.Error("GetScreensaverCommandString() returned empty string")
+	}
+	if !strings.Contains(cmd, "--datetime") {
+		t.Errorf("Command should include '--datetime' for beam-text: %s", cmd)
+	}
+	if !strings.Contains(cmd, "--datetime-position center") {
+		t.Errorf("Command should include '--datetime-position center' for beam-text: %s", cmd)
+	}
+	if !strings.Contains(cmd, "--datetime-interval 2s") {
+		t.Errorf("Command should include '--datetime-interval 2s' for beam-text: %s", cmd)
+	}
 }
 
 // TestCycleInterval tests cycle interval configuration
@@ -405,6 +518,39 @@ func TestCycleInterval(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestInvalidDatetimeIntervalFallsBackToDefault(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "test.conf")
+
+	configContent := `[animation]
+effect = matrix-art
+theme = rama
+datetime = true
+
+[datetime]
+position = center
+interval = 0s
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("Failed to write test config: %v", err)
+	}
+
+	cfg := NewConfig()
+	if err := cfg.LoadFromFile(configPath); err != nil {
+		t.Fatalf("LoadFromFile() failed: %v", err)
+	}
+
+	if cfg.GetDatetimeInterval() != time.Second {
+		t.Errorf("datetime interval = %v, want default %v", cfg.GetDatetimeInterval(), time.Second)
+	}
+	if cfg.GetDatetimePosition() != "center" {
+		t.Errorf("datetime position = %s, want center", cfg.GetDatetimePosition())
+	}
+	if !cfg.GetAnimationDatetime() {
+		t.Error("animation.datetime should remain true")
 	}
 }
 

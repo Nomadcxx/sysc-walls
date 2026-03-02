@@ -42,13 +42,13 @@ func CreateOptimizedAnimationWithText(effect string, width, height int, theme st
 	case "beam-text":
 		return newOptimizedBeamText(width, height, palette, text)
 	case "decrypt":
-		return newOptimizedDecrypt(width, height, palette)
+		return newOptimizedDecrypt(width, height, palette, text)
 	case "pour":
-		return newOptimizedPour(width, height, palette)
+		return newOptimizedPour(width, height, palette, text)
 	case "aquarium":
 		return newOptimizedAquarium(width, height, palette)
 	case "print":
-		return newOptimizedPrint(width, height, palette)
+		return newOptimizedPrint(width, height, palette, text)
 	case "blackhole":
 		return newOptimizedBlackhole(width, height, palette, text)
 	case "ring-text":
@@ -61,18 +61,18 @@ func CreateOptimizedAnimationWithText(effect string, width, height int, theme st
 // getThemePalette returns color palette for theme
 func getThemePalette(theme string) []string {
 	palettes := map[string][]string{
-		"dracula":        {"#282a36", "#44475a", "#f8f8f2", "#6272a4", "#8be9fd", "#50fa7b", "#ffb86c", "#ff79c6", "#bd93f9", "#ff5555", "#f1fa8c"},
-		"gruvbox":        {"#282828", "#cc241d", "#98971a", "#d79921", "#458588", "#b16286", "#689d6a", "#a89984", "#928374", "#fb4934", "#b8bb26", "#fabd2f", "#83a598", "#d3869b", "#8ec07c", "#ebdbb2"},
-		"nord":           {"#2e3440", "#3b4252", "#434c5e", "#4c566a", "#d8dee9", "#e5e9f0", "#eceff4", "#8fbcbb", "#88c0d0", "#81a1c1", "#5e81ac", "#bf616a", "#d08770", "#ebcb8b", "#a3be8c", "#b48ead"},
-		"tokyo-night":    {"#1a1b26", "#24283b", "#414868", "#565f89", "#787c99", "#a9b1d6", "#c0caf5", "#7aa2f7", "#bb9af7", "#7dcfff", "#73daca", "#9ece6a", "#e0af68", "#f7768e", "#ff9e64", "#db4b4b"},
-		"catppuccin":     {"#1e1e2e", "#181825", "#313244", "#45475a", "#585b70", "#cdd6f4", "#f5e0dc", "#f2cdcd", "#f5c2e7", "#cba6f7", "#f38ba8", "#eba0ac", "#fab387", "#f9e2af", "#a6e3a1", "#94e2d5", "#89dceb", "#74c7ec", "#89b4fa", "#b4befe"},
-		"material":       {"#263238", "#2e3c43", "#314549", "#37474f", "#607d8b", "#546e7a", "#b0bec5", "#80cbc4", "#4dd0e1", "#4fc3f7", "#29b6f6", "#039be5", "#0288d1", "#0277bd", "#01579b"},
-		"solarized":      {"#002b36", "#073642", "#586e75", "#657b83", "#839496", "#93a1a1", "#eee8d5", "#fdf6e3", "#b58900", "#cb4b16", "#dc322f", "#d33682", "#6c71c4", "#268bd2", "#2aa198", "#859900"},
+		"dracula":         {"#282a36", "#44475a", "#f8f8f2", "#6272a4", "#8be9fd", "#50fa7b", "#ffb86c", "#ff79c6", "#bd93f9", "#ff5555", "#f1fa8c"},
+		"gruvbox":         {"#282828", "#cc241d", "#98971a", "#d79921", "#458588", "#b16286", "#689d6a", "#a89984", "#928374", "#fb4934", "#b8bb26", "#fabd2f", "#83a598", "#d3869b", "#8ec07c", "#ebdbb2"},
+		"nord":            {"#2e3440", "#3b4252", "#434c5e", "#4c566a", "#d8dee9", "#e5e9f0", "#eceff4", "#8fbcbb", "#88c0d0", "#81a1c1", "#5e81ac", "#bf616a", "#d08770", "#ebcb8b", "#a3be8c", "#b48ead"},
+		"tokyo-night":     {"#1a1b26", "#24283b", "#414868", "#565f89", "#787c99", "#a9b1d6", "#c0caf5", "#7aa2f7", "#bb9af7", "#7dcfff", "#73daca", "#9ece6a", "#e0af68", "#f7768e", "#ff9e64", "#db4b4b"},
+		"catppuccin":      {"#1e1e2e", "#181825", "#313244", "#45475a", "#585b70", "#cdd6f4", "#f5e0dc", "#f2cdcd", "#f5c2e7", "#cba6f7", "#f38ba8", "#eba0ac", "#fab387", "#f9e2af", "#a6e3a1", "#94e2d5", "#89dceb", "#74c7ec", "#89b4fa", "#b4befe"},
+		"material":        {"#263238", "#2e3c43", "#314549", "#37474f", "#607d8b", "#546e7a", "#b0bec5", "#80cbc4", "#4dd0e1", "#4fc3f7", "#29b6f6", "#039be5", "#0288d1", "#0277bd", "#01579b"},
+		"solarized":       {"#002b36", "#073642", "#586e75", "#657b83", "#839496", "#93a1a1", "#eee8d5", "#fdf6e3", "#b58900", "#cb4b16", "#dc322f", "#d33682", "#6c71c4", "#268bd2", "#2aa198", "#859900"},
 		"monochrome":      {"#000000", "#1a1a1a", "#333333", "#4d4d4d", "#666666", "#808080", "#999999", "#b3b3b3", "#cccccc", "#e6e6e6", "#ffffff"},
 		"trainsishardjob": {"#000000", "#ff00ff", "#00ffff", "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ffffff"},
 		"rama":            {"#2b2d42", "#8d99ae", "#d90429", "#ef233c", "#edf2f4", "#ef233c", "#d90429", "#8d99ae", "#edf2f4"},
-		"eldritch":       {"#212337", "#292e42", "#7081d0", "#04d1f9", "#37f499", "#f16c75", "#a48cf2", "#f265b5", "#f7c67f", "#ebfafa"},
-		"dark":           {"#000000", "#1a1a1a", "#333333", "#4d4d4d", "#666666", "#808080", "#999999", "#b3b3b3", "#cccccc", "#e6e6e6", "#ffffff"},
+		"eldritch":        {"#212337", "#292e42", "#7081d0", "#04d1f9", "#37f499", "#f16c75", "#a48cf2", "#f265b5", "#f7c67f", "#ebfafa"},
+		"dark":            {"#000000", "#1a1a1a", "#333333", "#4d4d4d", "#666666", "#808080", "#999999", "#b3b3b3", "#cccccc", "#e6e6e6", "#ffffff"},
 	}
 
 	if palette, ok := palettes[theme]; ok {
@@ -158,6 +158,10 @@ func (f *optimizedFireText) Resize(width, height int) {
 	f.effect.Resize(width, height)
 }
 
+func (f *optimizedFireText) SetText(text string) {
+	f.effect.SetText(text)
+}
+
 // Fireworks - uses simple constructor
 type optimizedFireworks struct {
 	effect *syscGo.FireworksEffect
@@ -241,11 +245,11 @@ func (b *optimizedBeams) Resize(width, height int) {
 
 // BeamText - uses config struct with auto-sizing and centering wrapper
 type optimizedBeamText struct {
-	effect       *syscGo.BeamTextEffect
-	palette      []string
-	text         string
-	termWidth    int
-	termHeight   int
+	effect     *syscGo.BeamTextEffect
+	palette    []string
+	text       string
+	termWidth  int
+	termHeight int
 }
 
 func newOptimizedBeamText(width, height int, palette []string, text string) (*optimizedBeamText, error) {
@@ -287,21 +291,31 @@ func (b *optimizedBeamText) Resize(width, height int) {
 	b.effect = syscGo.NewBeamTextEffect(config)
 }
 
+func (b *optimizedBeamText) SetText(text string) {
+	b.text = text
+	b.effect.SetText(text)
+}
+
 // Decrypt - uses config struct
 type optimizedDecrypt struct {
 	effect  *syscGo.DecryptEffect
 	palette []string
+	text    string
 }
 
-func newOptimizedDecrypt(width, height int, palette []string) (*optimizedDecrypt, error) {
+func newOptimizedDecrypt(width, height int, palette []string, text string) (*optimizedDecrypt, error) {
 	config := syscGo.DecryptConfig{
-		Width:   width,
-		Height:  height,
-		Palette: palette,
+		Width:            width,
+		Height:           height,
+		Text:             text,
+		Palette:          palette,
+		CiphertextColors: palette,
+		TypingSpeed:      1,
 	}
 	return &optimizedDecrypt{
 		effect:  syscGo.NewDecryptEffect(config),
 		palette: palette,
+		text:    text,
 	}, nil
 }
 
@@ -315,27 +329,38 @@ func (d *optimizedDecrypt) Render() string {
 
 func (d *optimizedDecrypt) Resize(width, height int) {
 	config := syscGo.DecryptConfig{
-		Width:   width,
-		Height:  height,
-		Palette: d.palette,
+		Width:            width,
+		Height:           height,
+		Text:             d.text,
+		Palette:          d.palette,
+		CiphertextColors: d.palette,
+		TypingSpeed:      1,
 	}
 	d.effect = syscGo.NewDecryptEffect(config)
+}
+
+func (d *optimizedDecrypt) SetText(text string) {
+	d.text = text
+	d.effect.SetText(text)
 }
 
 // Pour - uses config struct
 type optimizedPour struct {
 	effect  *syscGo.PourEffect
 	palette []string
+	text    string
 }
 
-func newOptimizedPour(width, height int, palette []string) (*optimizedPour, error) {
+func newOptimizedPour(width, height int, palette []string, text string) (*optimizedPour, error) {
 	config := syscGo.PourConfig{
 		Width:  width,
 		Height: height,
+		Text:   text,
 	}
 	return &optimizedPour{
 		effect:  syscGo.NewPourEffect(config),
 		palette: palette,
+		text:    text,
 	}, nil
 }
 
@@ -351,8 +376,14 @@ func (p *optimizedPour) Resize(width, height int) {
 	config := syscGo.PourConfig{
 		Width:  width,
 		Height: height,
+		Text:   p.text,
 	}
 	p.effect = syscGo.NewPourEffect(config)
+}
+
+func (p *optimizedPour) SetText(text string) {
+	p.text = text
+	p.effect.SetText(text)
 }
 
 // Aquarium - uses config struct
@@ -430,16 +461,19 @@ func (a *optimizedAquarium) Resize(width, height int) {
 type optimizedPrint struct {
 	effect  *syscGo.PrintEffect
 	palette []string
+	text    string
 }
 
-func newOptimizedPrint(width, height int, palette []string) (*optimizedPrint, error) {
+func newOptimizedPrint(width, height int, palette []string, text string) (*optimizedPrint, error) {
 	config := syscGo.PrintConfig{
 		Width:  width,
 		Height: height,
+		Text:   text,
 	}
 	return &optimizedPrint{
 		effect:  syscGo.NewPrintEffect(config),
 		palette: palette,
+		text:    text,
 	}, nil
 }
 
@@ -455,8 +489,14 @@ func (p *optimizedPrint) Resize(width, height int) {
 	config := syscGo.PrintConfig{
 		Width:  width,
 		Height: height,
+		Text:   p.text,
 	}
 	p.effect = syscGo.NewPrintEffect(config)
+}
+
+func (p *optimizedPrint) SetText(text string) {
+	p.text = text
+	p.effect.SetText(text)
 }
 
 // MatrixArt - Matrix rain that crystallizes into ASCII art
@@ -486,6 +526,11 @@ func (m *optimizedMatrixArt) Resize(width, height int) {
 	m.effect = syscGo.NewMatrixArtEffect(width, height, m.palette, m.text)
 }
 
+func (m *optimizedMatrixArt) SetText(text string) {
+	m.text = text
+	m.effect.SetText(text)
+}
+
 // RainArt - Rain drops that freeze to form ASCII art
 type optimizedRainArt struct {
 	effect  *syscGo.RainArtEffect
@@ -511,6 +556,11 @@ func (r *optimizedRainArt) Render() string {
 
 func (r *optimizedRainArt) Resize(width, height int) {
 	r.effect = syscGo.NewRainArtEffect(width, height, r.palette, r.text)
+}
+
+func (r *optimizedRainArt) SetText(text string) {
+	r.text = text
+	r.effect.SetText(text)
 }
 
 // Blackhole - Text gets consumed by a blackhole and explodes
@@ -560,6 +610,11 @@ func (b *optimizedBlackhole) Resize(width, height int) {
 	b.effect = syscGo.NewBlackholeEffect(config)
 }
 
+func (b *optimizedBlackhole) SetText(text string) {
+	b.text = text
+	b.effect.SetText(text)
+}
+
 // RingText - Text spins on concentric rings with vortex motion
 type optimizedRingText struct {
 	effect  *syscGo.RingTextEffect
@@ -603,6 +658,11 @@ func (r *optimizedRingText) Resize(width, height int) {
 		StaticGradientDir:   syscGo.GradientHorizontal,
 	}
 	r.effect = syscGo.NewRingTextEffect(config)
+}
+
+func (r *optimizedRingText) SetText(text string) {
+	r.text = text
+	r.effect.SetText(text)
 }
 
 // stripAnsiCodes removes ANSI escape codes from a string for width calculation

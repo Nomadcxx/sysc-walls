@@ -22,7 +22,7 @@ var AvailableEffects = syscGo.GetEffectNames()
 var AvailableThemes = syscGo.GetThemeNames()
 
 // MinimumSyscGoVersion is the minimum required version of sysc-Go
-const MinimumSyscGoVersion = "1.0.1"
+const MinimumSyscGoVersion = "1.0.3"
 
 // findDisplayBinary locates sysc-walls-display in standard locations
 func findDisplayBinary() (string, error) {
@@ -33,9 +33,9 @@ func findDisplayBinary() (string, error) {
 
 	// Fallback to common locations
 	locations := []string{
-		"/usr/bin/sysc-walls-display",           // AUR/system package
-		"/usr/local/bin/sysc-walls-display",     // Manual install
-		"./sysc-walls-display",                  // Current directory (development)
+		"/usr/bin/sysc-walls-display",       // AUR/system package
+		"/usr/local/bin/sysc-walls-display", // Manual install
+		"./sysc-walls-display",              // Current directory (development)
 	}
 
 	for _, loc := range locations {
@@ -49,18 +49,19 @@ func findDisplayBinary() (string, error) {
 
 // Config represents the daemon configuration
 type Config struct {
-	idleTimeout         time.Duration
-	minDuration         time.Duration
-	debug               bool
-	animationEffect     string
-	animationTheme      string
-	animationFile       string // Custom artwork file path for text-based effects
-	animationDatetime   bool   // Show date/time overlay (only for non-text effects)
-	datetimePosition    string // Position of datetime: "top", "center", "bottom"
-	cycleAnimations     bool
-	cycleInterval       time.Duration // How often to switch animations when cycling
-	terminalKitty       bool
-	terminalFullscreen  bool
+	idleTimeout        time.Duration
+	minDuration        time.Duration
+	debug              bool
+	animationEffect    string
+	animationTheme     string
+	animationFile      string // Custom artwork file path for text-based effects
+	animationDatetime  bool   // Show date/time display in screensaver
+	datetimePosition   string // Position of datetime: "top", "center", "bottom"
+	datetimeInterval   time.Duration
+	cycleAnimations    bool
+	cycleInterval      time.Duration // How often to switch animations when cycling
+	terminalKitty      bool
+	terminalFullscreen bool
 }
 
 // NewConfig creates a new configuration instance
@@ -71,8 +72,9 @@ func NewConfig() *Config {
 		debug:              false,
 		animationEffect:    "matrix-art",
 		animationTheme:     "rama",
-		animationDatetime:  false,    // datetime overlay disabled by default
+		animationDatetime:  false,
 		datetimePosition:   "bottom", // datetime position: top, center, or bottom
+		datetimeInterval:   1 * time.Second,
 		cycleAnimations:    false,
 		cycleInterval:      5 * time.Minute, // 5 minutes default for animation cycling
 		terminalKitty:      true,
@@ -206,6 +208,16 @@ func (c *Config) parseConfigLine(key, value string) {
 		} else {
 			fmt.Fprintf(os.Stderr, "Warning: Invalid datetime position '%s'. Must be top, center, or bottom. Using default.\n", value)
 		}
+	case "datetime.interval":
+		if duration, err := parseDuration(value); err == nil {
+			if duration > 0 {
+				c.datetimeInterval = duration
+			} else {
+				fmt.Fprintf(os.Stderr, "Warning: Invalid datetime interval '%s'. Must be > 0. Using default.\n", value)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "Warning: Invalid datetime interval '%s': %v. Using default.\n", value, err)
+		}
 	case "animation.cycle":
 		if boolVal, err := strconv.ParseBool(value); err == nil {
 			c.cycleAnimations = boolVal
@@ -321,8 +333,13 @@ func (c *Config) createDefaultConfig(configPath string) error {
 		"# Available effects: " + strings.Join(AvailableEffects, ", "),
 		fmt.Sprintf("theme = %s", c.animationTheme),
 		"# Available themes: " + strings.Join(AvailableThemes, ", "),
+		fmt.Sprintf("datetime = %t", c.animationDatetime),
 		fmt.Sprintf("cycle = %t", c.cycleAnimations),
 		fmt.Sprintf("cycle_interval = %s", formatDuration(c.cycleInterval)),
+		"",
+		"[datetime]",
+		fmt.Sprintf("position = %s", c.datetimePosition),
+		fmt.Sprintf("interval = %s", formatDuration(c.datetimeInterval)),
 		"",
 		"[terminal]",
 		fmt.Sprintf("kitty = %t", c.terminalKitty),
@@ -391,8 +408,13 @@ func (c *Config) SaveToFile(configPath string) error {
 		"# Available effects: " + strings.Join(AvailableEffects, ", "),
 		fmt.Sprintf("theme = %s", c.animationTheme),
 		"# Available themes: " + strings.Join(AvailableThemes, ", "),
+		fmt.Sprintf("datetime = %t", c.animationDatetime),
 		fmt.Sprintf("cycle = %t", c.cycleAnimations),
 		fmt.Sprintf("cycle_interval = %s", formatDuration(c.cycleInterval)),
+		"",
+		"[datetime]",
+		fmt.Sprintf("position = %s", c.datetimePosition),
+		fmt.Sprintf("interval = %s", formatDuration(c.datetimeInterval)),
 		"",
 		"[terminal]",
 		fmt.Sprintf("kitty = %t", c.terminalKitty),
@@ -472,6 +494,11 @@ func (c *Config) GetDatetimePosition() string {
 	return c.datetimePosition
 }
 
+// GetDatetimeInterval returns how often datetime should refresh.
+func (c *Config) GetDatetimeInterval() time.Duration {
+	return c.datetimeInterval
+}
+
 // SetAnimationTheme sets the animation theme with validation
 func (c *Config) SetAnimationTheme(theme string) error {
 	if !IsValidTheme(theme) {
@@ -544,6 +571,24 @@ func isSafePath(path string) bool {
 	}
 
 	return false
+}
+
+func supportsNativeDateTimeEffect(effect string) bool {
+	switch effect {
+	case "matrix-art", "rain-art", "beam-text":
+		return true
+	default:
+		return false
+	}
+}
+
+func datetimeOverlayBlockedEffect(effect string) bool {
+	switch effect {
+	case "fire-text":
+		return true
+	default:
+		return false
+	}
 }
 
 // ShouldCycleAnimations returns whether animations should be cycled
@@ -645,19 +690,16 @@ func (c *Config) GetScreensaverCommand() (string, []string, error) {
 		args = append(args, "--file", file)
 	}
 
-	// Add datetime overlay if enabled and compatible with effect
+	// Add datetime flags if enabled.
 	datetime := c.GetAnimationDatetime()
 	if datetime {
-		// Check if effect is text-based (datetime overlay is incompatible with text-based effects)
-		if syscGo.IsTextBasedEffect(effect) {
-			// Log warning but don't fail - just disable datetime for this launch
-			fmt.Fprintf(os.Stderr, "Warning: DateTime overlay disabled - incompatible with text-based effect '%s'\n", effect)
-			fmt.Fprintf(os.Stderr, "         DateTime only works with non-text effects like: matrix, fire, rain, aquarium, fireworks, beams\n")
+		if datetimeOverlayBlockedEffect(effect) {
+			fmt.Fprintf(os.Stderr, "Warning: DateTime disabled for effect '%s'\n", effect)
 		} else {
-			// Effect is compatible, add --datetime flag and position
 			args = append(args, "--datetime")
 			position := c.GetDatetimePosition()
 			args = append(args, "--datetime-position", position)
+			args = append(args, "--datetime-interval", formatDuration(c.GetDatetimeInterval()))
 		}
 	}
 

@@ -96,7 +96,9 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 
 	// Create Wayland idle detector
 	onIdle := func() {
-		log.Println("[Go callback] Wayland idle callback invoked")
+		if d.config.IsDebug() {
+			log.Println("[Go callback] Wayland idle callback invoked")
+		}
 		// Fire idle event
 		select {
 		case d.idleChan <- struct{}{}:
@@ -109,7 +111,9 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 	}
 
 	onResume := func() {
-		log.Println("[Go callback] Wayland resume callback invoked")
+		if d.config.IsDebug() {
+			log.Println("[Go callback] Wayland resume callback invoked")
+		}
 		d.mu.Lock()
 		d.lastActive = time.Now()
 		d.mu.Unlock()

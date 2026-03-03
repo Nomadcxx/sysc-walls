@@ -151,9 +151,9 @@ func (w *WaylandCGODetector) Start() error {
 					}
 				}
 				
-				// Heartbeat logging every 30 seconds
+				// Heartbeat logging every 5 minutes
 				pollCount++
-				if time.Since(lastHeartbeat) >= 30*time.Second {
+				if time.Since(lastHeartbeat) >= 5*time.Minute {
 					log.Printf("[Heartbeat] Wayland event loop active, polls: %d", pollCount)
 					lastHeartbeat = time.Now()
 					pollCount = 0

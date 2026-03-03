@@ -154,7 +154,6 @@ func (w *WaylandIdleDetector) registerIdleTimeout() error {
 
 	// Set handler for when system goes idle
 	notification.SetIdledHandler(func(e ext_idle_notify.IdleNotificationIdledEvent) {
-		log.Println("Wayland idle detected")
 		if w.onIdle != nil {
 			w.onIdle()
 		}
@@ -162,7 +161,6 @@ func (w *WaylandIdleDetector) registerIdleTimeout() error {
 
 	// Set handler for when system resumes from idle
 	notification.SetResumedHandler(func(e ext_idle_notify.IdleNotificationResumedEvent) {
-		log.Println("Wayland activity detected (resumed)")
 		if w.onResume != nil {
 			w.onResume()
 		}

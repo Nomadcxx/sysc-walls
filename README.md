@@ -261,3 +261,8 @@ Have a feature request? Open an issue on [GitHub](https://github.com/Nomadcxx/sy
 ## License
 
 GPL-3.0
+
+---
+
+Built by [RAMA](https://github.com/Nomadcxx) — terminal-native tooling for the linux desktop.
+[More projects →](https://github.com/Nomadcxx) · [Sponsor ♥](https://github.com/sponsors/Nomadcxx)

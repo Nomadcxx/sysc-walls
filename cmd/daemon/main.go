@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -43,15 +44,25 @@ type Daemon struct {
 	idleDet    *idle.IdleDetector
 	compositor compositor.Compositor
 	debug      bool
+
+	// useFallbackTimer is true only when no native idle source is available.
+	// Atomic because the signal handler calls onActivity concurrently with Run.
+	// See configureFallbackTimer.
+	useFallbackTimer atomic.Bool
 }
 
 // NewDaemon creates a new daemon instance
 func NewDaemon(cfg *config.Config) *Daemon {
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// The fallback timer starts disarmed; Run arms it only if the idle detector
+	// has no native idle source (see configureFallbackTimer).
+	idleTimer := time.NewTimer(cfg.GetIdleTimeout())
+	idleTimer.Stop()
+
 	return &Daemon{
 		config:    cfg,
-		idleTimer: time.NewTimer(cfg.GetIdleTimeout()),
+		idleTimer: idleTimer,
 		ctx:       ctx,
 		cancel:    cancel,
 		systemD:   systemd.NewSystemD(cfg),
@@ -190,6 +201,9 @@ func (d *Daemon) Run() {
 		log.Printf("Failed to start idle detector: %v", err)
 	}
 
+	// Arm the wall-clock fallback only if nothing else reports idleness
+	d.configureFallbackTimer(d.idleDet.HasNativeIdleDetection())
+
 	// Start main event loop
 	d.eventLoop()
 }
@@ -204,8 +218,6 @@ func (d *Daemon) eventLoop() {
 			if d.debug {
 				log.Println("Idle detector triggered")
 			}
-			// Stop timer since we're using native detection
-			d.idleTimer.Stop()
 			d.onIdle()
 		case <-d.idleDet.Events().Resume:
 			if d.debug {
@@ -213,6 +225,11 @@ func (d *Daemon) eventLoop() {
 			}
 			d.onActivity()
 		case <-d.idleTimer.C:
+			// Only a live fallback timer may launch the screensaver; ignore a
+			// tick that raced with the timer being disabled.
+			if !d.useFallbackTimer.Load() {
+				continue
+			}
 			if d.debug {
 				log.Println("Timer triggered idle (fallback)")
 			}
@@ -241,8 +258,36 @@ func (d *Daemon) onIdle() {
 	d.resetIdleTimer()
 }
 
-// resetIdleTimer resets the idle timeout timer
+// configureFallbackTimer decides whether the wall-clock idle timer is used.
+//
+// The timer measures wall-clock time, not user activity: it is only reset by a
+// resume event, and compositors emit resume only after they have emitted idle.
+// Alongside a native idle source that never goes idle during use, the timer
+// would therefore expire mid-session and launch a screensaver that no keypress
+// could dismiss, since no resume would ever follow. So it is armed only when
+// the detector found no native idle source at all (see issue #24).
+func (d *Daemon) configureFallbackTimer(nativeIdleDetection bool) {
+	d.useFallbackTimer.Store(!nativeIdleDetection)
+
+	if !d.useFallbackTimer.Load() {
+		d.idleTimer.Stop()
+		if d.debug {
+			log.Println("Native idle detection active, wall-clock fallback timer disabled")
+		}
+		return
+	}
+
+	log.Printf("No native idle detection available, using wall-clock fallback timer (%v)", d.config.GetIdleTimeout())
+	d.resetIdleTimer()
+}
+
+// resetIdleTimer resets the idle timeout timer. It is a no-op when a native
+// idle source is in charge of idle timing.
 func (d *Daemon) resetIdleTimer() {
+	if !d.useFallbackTimer.Load() {
+		return
+	}
+
 	d.idleTimer.Stop()
 	d.idleTimer.Reset(d.config.GetIdleTimeout())
 }

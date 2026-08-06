@@ -25,6 +25,7 @@ type IdleDetector struct {
 	idleTimeout time.Duration
 	idleChan    chan struct{}
 	resumeChan  chan struct{}
+	nativeIdle  bool
 }
 
 // Events provides channels for idle and resume events
@@ -50,6 +51,26 @@ func (d *IdleDetector) Events() *Events {
 		Idle:   d.idleChan,
 		Resume: d.resumeChan,
 	}
+}
+
+// HasNativeIdleDetection reports whether a source that emits idle events on its
+// own is active (the Wayland ext-idle-notify listener or the X11 xprintidle
+// poller). Callers use this to decide whether a wall-clock fallback timer is
+// needed: those sources already encode the timeout and track real user activity,
+// so a fallback timer alongside them would fire during active use.
+//
+// Only meaningful after Start has returned.
+func (d *IdleDetector) HasNativeIdleDetection() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.nativeIdle
+}
+
+// setNativeIdleDetection records that a native idle source is active.
+func (d *IdleDetector) setNativeIdleDetection() {
+	d.mu.Lock()
+	d.nativeIdle = true
+	d.mu.Unlock()
 }
 
 // Start starts the idle detector
@@ -149,6 +170,9 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 		return err
 	}
 
+	// The compositor now owns idle timing via ext-idle-notify-v1
+	d.setNativeIdleDetection()
+
 	// Also start direct input device monitoring as a backup
 	// This catches cases where compositor's idle detection has issues (e.g., niri multi-monitor)
 	log.Println("Starting input device monitoring as backup for Wayland")
@@ -170,6 +194,10 @@ func (d *IdleDetector) startX11Monitor(ctx context.Context) {
 		log.Println("xprintidle not found, X11 idle detection not available")
 		return
 	}
+
+	// xprintidle reports real idle time, so the poller below emits idle events
+	// on its own once the configured timeout elapses
+	d.setNativeIdleDetection()
 
 	// Start xprintidle monitoring in a goroutine
 	go func() {

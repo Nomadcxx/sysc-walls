@@ -588,3 +588,65 @@ cycle_interval = 10m
 		t.Error("Loaded cycle = false, want true")
 	}
 }
+
+// TestSetIdleTimeout_RejectsNonPositive verifies that a zero or missing idle
+// timeout is refused.
+//
+// A zero timeout arms the daemon's fallback timer with no delay, so it launches
+// the screensaver, resets, and fires again as fast as the CPU allows.
+func TestSetIdleTimeout_RejectsNonPositive(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		wantErr bool
+	}{
+		{name: "zero seconds", value: "0s", wantErr: true},
+		{name: "zero minutes", value: "0m", wantErr: true},
+		{name: "bare zero", value: "0", wantErr: true},
+		{name: "one second", value: "1s"},
+		{name: "fifteen minutes", value: "15m"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := NewConfig()
+			before := cfg.GetIdleTimeout()
+
+			err := cfg.SetIdleTimeout(tt.value)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("SetIdleTimeout(%q) error = nil, want an error", tt.value)
+				}
+				if got := cfg.GetIdleTimeout(); got != before {
+					t.Errorf("GetIdleTimeout() = %v after a rejected value, want %v unchanged", got, before)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("SetIdleTimeout(%q) error = %v", tt.value, err)
+			}
+		})
+	}
+}
+
+// TestLoadFromFile_IgnoresNonPositiveIdleTimeout verifies that a bad timeout in
+// the config file leaves the default in place instead of arming a zero timer.
+func TestLoadFromFile_IgnoresNonPositiveIdleTimeout(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "daemon.conf")
+	if err := os.WriteFile(configPath, []byte("idle.timeout = 0s\n"), 0o644); err != nil {
+		t.Fatalf("writing config: %v", err)
+	}
+
+	cfg := NewConfig()
+	want := cfg.GetIdleTimeout()
+
+	if err := cfg.LoadFromFile(configPath); err != nil {
+		t.Fatalf("LoadFromFile() error = %v", err)
+	}
+
+	if got := cfg.GetIdleTimeout(); got != want {
+		t.Errorf("GetIdleTimeout() = %v, want the default %v", got, want)
+	}
+}

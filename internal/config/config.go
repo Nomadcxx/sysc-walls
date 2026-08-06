@@ -149,7 +149,13 @@ func (c *Config) parseConfigLine(key, value string) {
 	switch key {
 	case "idle.timeout":
 		if duration, err := parseDuration(value); err == nil {
-			c.idleTimeout = duration
+			if duration > 0 {
+				c.idleTimeout = duration
+			} else {
+				fmt.Fprintf(os.Stderr, "Warning: Invalid idle timeout '%s'. Must be > 0. Using default.\n", value)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "Warning: Invalid idle timeout '%s': %v. Using default.\n", value, err)
 		}
 	case "idle.min_duration":
 		if duration, err := parseDuration(value); err == nil {
@@ -435,11 +441,16 @@ func (c *Config) GetIdleTimeout() time.Duration {
 	return c.idleTimeout
 }
 
-// SetIdleTimeout sets the idle timeout duration
+// SetIdleTimeout sets the idle timeout duration. A non-positive timeout is
+// refused: it would arm the daemon's fallback timer with no delay, launching
+// the screensaver and re-arming as fast as the CPU allows.
 func (c *Config) SetIdleTimeout(timeoutStr string) error {
 	duration, err := parseDuration(timeoutStr)
 	if err != nil {
 		return err
+	}
+	if duration <= 0 {
+		return fmt.Errorf("idle timeout must be greater than zero: %s", timeoutStr)
 	}
 	c.idleTimeout = duration
 	return nil

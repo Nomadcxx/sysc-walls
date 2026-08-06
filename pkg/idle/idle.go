@@ -25,6 +25,7 @@ type IdleDetector struct {
 	idleTimeout time.Duration
 	idleChan    chan struct{}
 	resumeChan  chan struct{}
+	nativeIdle  string
 }
 
 // Events provides channels for idle and resume events
@@ -50,6 +51,36 @@ func (d *IdleDetector) Events() *Events {
 		Idle:   d.idleChan,
 		Resume: d.resumeChan,
 	}
+}
+
+// Native idle source names reported by NativeIdleSource.
+const (
+	SourceWaylandIdleNotify = "wayland-ext-idle-notify"
+	SourceX11Xprintidle     = "x11-xprintidle"
+)
+
+// NativeIdleSource names the source that emits idle events on its own, or ""
+// when none was started. Callers use it to decide whether a wall-clock fallback
+// timer is needed: these sources encode the timeout and track real user
+// activity, so a fallback timer alongside one would fire during active use.
+//
+// The evdev and polling monitors are not native sources — they only report
+// activity (resume), never idle.
+//
+// Valid once Start has returned, including when Start returns an error: a
+// failed Wayland init that fell back to a working X11 poller reports the X11
+// source. This is a record of what started successfully, not a liveness check;
+// it is never cleared, so a source that later stops working still reports.
+func (d *IdleDetector) NativeIdleSource() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.nativeIdle
+}
+
+func (d *IdleDetector) setNativeIdleSource(name string) {
+	d.mu.Lock()
+	d.nativeIdle = name
+	d.mu.Unlock()
 }
 
 // Start starts the idle detector
@@ -149,6 +180,9 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 		return err
 	}
 
+	// The compositor now owns idle timing via ext-idle-notify-v1
+	d.setNativeIdleSource(SourceWaylandIdleNotify)
+
 	// Also start direct input device monitoring as a backup
 	// This catches cases where compositor's idle detection has issues (e.g., niri multi-monitor)
 	log.Println("Starting input device monitoring as backup for Wayland")
@@ -163,37 +197,56 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 	return nil
 }
 
-// startX11Monitor starts X11 idle detection using xprintidle
+// startX11Monitor starts X11 idle detection using xprintidle.
+//
+// Activity monitoring starts regardless; only the idle poller depends on a
+// working xprintidle, so a system without one still detects input.
 func (d *IdleDetector) startX11Monitor(ctx context.Context) {
-	// Check if xprintidle is available
-	if _, err := os.Stat("/usr/bin/xprintidle"); err != nil {
+	// Start input device monitoring for immediate activity detection
+	go d.startInputDeviceMonitor(ctx)
+
+	// A usable xprintidle is one that runs and returns a reading. Finding the
+	// binary is not enough: it also needs a reachable X server, which a
+	// Wayland session without Xwayland does not have. Claiming the idle source
+	// without checking would disable the caller's fallback timer in favour of
+	// a poller that can never report idle.
+	xprintidlePath, err := exec.LookPath("xprintidle")
+	if err != nil {
 		log.Println("xprintidle not found, X11 idle detection not available")
 		return
 	}
+	if _, err := readXprintidle(xprintidlePath); err != nil {
+		log.Printf("xprintidle found at %s but not usable, X11 idle detection not available: %v", xprintidlePath, err)
+		return
+	}
+
+	// xprintidle reports real idle time, so the poller emits idle events on
+	// its own once the configured timeout elapses
+	d.setNativeIdleSource(SourceX11Xprintidle)
 
 	// Start xprintidle monitoring in a goroutine
 	go func() {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 
+		reportedFailure := false
+
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				// Run xprintidle
-				cmd := exec.Command("xprintidle")
-				output, err := cmd.Output()
+				idleTime, err := readXprintidle(xprintidlePath)
 				if err != nil {
-					if d.config.IsDebug() {
-						log.Printf("xprintidle error: %v", err)
+					// Warn once per outage rather than every second: a poller
+					// that stops reporting means no idle event fires again
+					if !reportedFailure {
+						log.Printf("xprintidle stopped reporting, idle detection is degraded: %v", err)
+						reportedFailure = true
 					}
 					continue
 				}
-
-				// Parse the idle time in milliseconds
-				idleMs := parseInt(string(output))
-				idleTime := time.Duration(idleMs) * time.Millisecond
+				reportedFailure = false
 
 				// Check if we've exceeded the idle threshold
 				if idleTime >= d.idleTimeout {
@@ -224,9 +277,21 @@ func (d *IdleDetector) startX11Monitor(ctx context.Context) {
 			}
 		}
 	}()
+}
 
-	// Start input device monitoring for immediate activity detection
-	go d.startInputDeviceMonitor(ctx)
+// readXprintidle runs xprintidle once and returns the idle time it reports.
+func readXprintidle(path string) (time.Duration, error) {
+	output, err := exec.Command(path).Output()
+	if err != nil {
+		return 0, fmt.Errorf("running %s: %w", path, err)
+	}
+
+	ms, err := strconv.Atoi(strings.TrimSpace(string(output)))
+	if err != nil {
+		return 0, fmt.Errorf("parsing %s output %q: %w", path, output, err)
+	}
+
+	return time.Duration(ms) * time.Millisecond, nil
 }
 
 // startInputDeviceMonitor monitors input devices for immediate activity detection
@@ -480,12 +545,3 @@ func (d *IdleDetector) MarkActive() {
 	}
 }
 
-// Helper functions
-
-// parseInt parses an integer from a string
-func parseInt(s string) int {
-	// Trim whitespace and use strconv for proper parsing
-	s = strings.TrimSpace(s)
-	result, _ := strconv.Atoi(s)
-	return result
-}

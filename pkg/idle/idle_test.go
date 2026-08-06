@@ -3,6 +3,7 @@ package idle
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -159,31 +160,6 @@ func TestDetectDisplayServer(t *testing.T) {
 	}
 }
 
-// TestParseInt tests integer parsing
-func TestParseInt(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected int
-	}{
-		{"0", 0},
-		{"123", 123},
-		{"  456  ", 456},
-		{"-10", -10},
-		{"invalid", 0},
-		{"", 0},
-		{"12.34", 0}, // strconv.Atoi fails on decimals
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := parseInt(tt.input)
-			if result != tt.expected {
-				t.Errorf("parseInt(%q) = %d, want %d", tt.input, result, tt.expected)
-			}
-		})
-	}
-}
-
 // TestHasXprintidle tests xprintidle detection
 func TestHasXprintidle(t *testing.T) {
 	// This test just verifies the function doesn't panic
@@ -268,3 +244,140 @@ func TestIdleDetector_ActivityResets(t *testing.T) {
 }
 
 
+
+// writeFakeXprintidle puts an executable named xprintidle in a fresh directory
+// and points PATH at it, so the X11 probe can be driven deterministically.
+func writeFakeXprintidle(t *testing.T, script string) {
+	t.Helper()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "xprintidle")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+script+"\n"), 0o755); err != nil {
+		t.Fatalf("writing fake xprintidle: %v", err)
+	}
+
+	t.Setenv("PATH", dir)
+}
+
+// TestNativeIdleSource_BeforeStart verifies no source is claimed until Start runs.
+func TestNativeIdleSource_BeforeStart(t *testing.T) {
+	detector := NewIdleDetector(config.NewConfig())
+
+	if got := detector.NativeIdleSource(); got != "" {
+		t.Errorf("NativeIdleSource() = %q before Start, want \"\"", got)
+	}
+}
+
+// TestNativeIdleSource_ByEnvironment verifies which environments claim a native
+// idle source. Anything that reports "" must keep the daemon's wall-clock
+// fallback timer armed, and anything that reports a source must be able to
+// deliver idle events on its own.
+func TestNativeIdleSource_ByEnvironment(t *testing.T) {
+	tests := []struct {
+		name string
+		// xprintidle is the body of a fake xprintidle on PATH; "" means none
+		xprintidle string
+		display    string
+		want       string
+	}{
+		{
+			name:    "no display server",
+			display: "",
+			want:    "",
+		},
+		{
+			name:    "x11 without xprintidle",
+			display: ":0",
+			want:    "",
+		},
+		{
+			// Regression guard: a present but unusable xprintidle must not
+			// claim the source. It reports no idle time, so claiming it would
+			// disable the fallback timer and the screensaver would never launch.
+			name:       "x11 with xprintidle that cannot reach a display",
+			xprintidle: "echo 'Cannot open display' >&2; exit 1",
+			display:    ":99",
+			want:       "",
+		},
+		{
+			name:       "x11 with xprintidle returning garbage",
+			xprintidle: "echo not-a-number",
+			display:    ":0",
+			want:       "",
+		},
+		{
+			name:       "x11 with working xprintidle",
+			xprintidle: "echo 1234",
+			display:    ":0",
+			want:       SourceX11Xprintidle,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.xprintidle != "" {
+				writeFakeXprintidle(t, tt.xprintidle)
+			} else {
+				t.Setenv("PATH", t.TempDir())
+			}
+
+			// Never Wayland: that path needs a live compositor
+			t.Setenv("WAYLAND_DISPLAY", "")
+			t.Setenv("DISPLAY", tt.display)
+
+			detector := NewIdleDetector(config.NewConfig())
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			if err := detector.Start(ctx); err != nil {
+				t.Fatalf("Start() error = %v", err)
+			}
+
+			if got := detector.NativeIdleSource(); got != tt.want {
+				t.Errorf("NativeIdleSource() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestReadXprintidle tests the probe used to decide whether xprintidle works.
+func TestReadXprintidle(t *testing.T) {
+	tests := []struct {
+		name    string
+		script  string
+		want    time.Duration
+		wantErr bool
+	}{
+		{name: "reports idle time", script: "echo 4500", want: 4500 * time.Millisecond},
+		{name: "trims whitespace", script: "echo '  120  '", want: 120 * time.Millisecond},
+		{name: "command fails", script: "exit 1", wantErr: true},
+		{name: "non-numeric output", script: "echo nope", wantErr: true},
+		{name: "empty output", script: "true", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "xprintidle")
+			if err := os.WriteFile(path, []byte("#!/bin/sh\n"+tt.script+"\n"), 0o755); err != nil {
+				t.Fatalf("writing fake xprintidle: %v", err)
+			}
+
+			got, err := readXprintidle(path)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("readXprintidle() = %v, want error", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("readXprintidle() error = %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("readXprintidle() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

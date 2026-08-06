@@ -121,6 +121,18 @@ func detectDisplayServer() string {
 	return "none"
 }
 
+// waylandDetector is the part of the CGO detector idle detection depends on.
+type waylandDetector interface {
+	Start() error
+	Stop()
+}
+
+// newWaylandDetector builds the detector for the Wayland path. Tests replace it
+// to reach the failure paths, which need no compositor.
+var newWaylandDetector = func(timeout time.Duration, onIdle, onResume func()) (waylandDetector, error) {
+	return NewWaylandCGODetector(timeout, onIdle, onResume)
+}
+
 // startWaylandIdleDetection starts native Wayland idle detection using ext-idle-notify-v1
 func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 	log.Println("Starting Wayland idle detection using CGO bindings to native libwayland")
@@ -166,7 +178,7 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 		}
 	}
 
-	waylandDetector, err := NewWaylandCGODetector(d.idleTimeout, onIdle, onResume)
+	detector, err := newWaylandDetector(d.idleTimeout, onIdle, onResume)
 	if err != nil {
 		log.Printf("Failed to create Wayland CGO detector: %v", err)
 		log.Println("Falling back to X11 detection if available")
@@ -174,9 +186,15 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 		return err
 	}
 
-	// Start the Wayland detector
-	if err := waylandDetector.Start(); err != nil {
+	// Start the Wayland detector. A failure here has to fall back the same way
+	// creation does: without it the daemon has no idle source and no activity
+	// source, so the caller's fallback timer would launch a screensaver that
+	// no keypress could dismiss.
+	if err := detector.Start(); err != nil {
 		log.Printf("Failed to start Wayland CGO detector: %v", err)
+		log.Println("Falling back to X11 detection if available")
+		detector.Stop()
+		d.startX11Monitor(ctx)
 		return err
 	}
 
@@ -191,7 +209,7 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 	// Monitor context cancellation and stop the detector
 	go func() {
 		<-ctx.Done()
-		waylandDetector.Stop()
+		detector.Stop()
 	}()
 
 	return nil

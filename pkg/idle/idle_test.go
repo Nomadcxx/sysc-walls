@@ -2,6 +2,7 @@ package idle
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -377,6 +378,84 @@ func TestReadXprintidle(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("readXprintidle() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// stubWaylandDetector stands in for the CGO detector so the failure paths can
+// be exercised without a compositor.
+type stubWaylandDetector struct {
+	startErr error
+	stopped  bool
+}
+
+func (s *stubWaylandDetector) Start() error { return s.startErr }
+func (s *stubWaylandDetector) Stop()        { s.stopped = true }
+
+// TestStartWaylandIdleDetection_FallsBackWhenDetectorFails verifies that a
+// Wayland detector which cannot be created or cannot start hands over to the
+// X11 and input-device monitors instead of leaving nothing running.
+//
+// Without the handover the daemon has no idle source and no activity source,
+// so its wall-clock timer launches a screensaver that no keypress dismisses.
+func TestStartWaylandIdleDetection_FallsBackWhenDetectorFails(t *testing.T) {
+	tests := []struct {
+		name        string
+		constructor func() (waylandDetector, error)
+		wantStopped bool
+	}{
+		{
+			name: "detector cannot be created",
+			constructor: func() (waylandDetector, error) {
+				return nil, errors.New("no ext-idle-notifier-v1")
+			},
+		},
+		{
+			name: "detector is created but cannot start",
+			constructor: func() (waylandDetector, error) {
+				return &stubWaylandDetector{startErr: errors.New("failed to get Wayland FD")}, nil
+			},
+			// A detector that was created holds a Wayland connection, so the
+			// fallback has to release it
+			wantStopped: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stub *stubWaylandDetector
+
+			original := newWaylandDetector
+			newWaylandDetector = func(time.Duration, func(), func()) (waylandDetector, error) {
+				detector, err := tt.constructor()
+				if d, ok := detector.(*stubWaylandDetector); ok {
+					stub = d
+				}
+				return detector, err
+			}
+			t.Cleanup(func() { newWaylandDetector = original })
+
+			// A working xprintidle, so the fallback has something to claim
+			writeFakeXprintidle(t, "echo 500")
+			t.Setenv("WAYLAND_DISPLAY", "wayland-0")
+			t.Setenv("DISPLAY", ":0")
+
+			detector := NewIdleDetector(config.NewConfig())
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			if err := detector.Start(ctx); err == nil {
+				t.Error("Start() error = nil, want the Wayland failure reported")
+			}
+
+			if got := detector.NativeIdleSource(); got != SourceX11Xprintidle {
+				t.Errorf("NativeIdleSource() = %q, want %q: the fallback did not start", got, SourceX11Xprintidle)
+			}
+
+			if tt.wantStopped && (stub == nil || !stub.stopped) {
+				t.Error("the failed Wayland detector was not stopped, leaking its connection")
 			}
 		})
 	}

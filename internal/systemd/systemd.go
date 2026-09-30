@@ -17,6 +17,11 @@ type ScreensaverProcess struct {
 	PID    int
 	Cmd    *exec.Cmd
 	Output string // Monitor identifier (e.g., "DP-1", "HDMI-A-0")
+
+	// done is closed once the process has exited and been reaped. A nil
+	// channel means the process was not started through LaunchScreensaver,
+	// so nothing is reaping it.
+	done chan struct{}
 }
 
 // SystemD handles systemd integration
@@ -55,8 +60,21 @@ func (s *SystemD) LaunchScreensaver(terminal string, args []string, outputName s
 		PID:    cmd.Process.Pid,
 		Cmd:    cmd,
 		Output: outputName,
+		done:   make(chan struct{}),
 	}
 	s.processes = append(s.processes, process)
+
+	// Reap the child as soon as it exits. Without this the daemon keeps a
+	// zombie for every screensaver that exits on its own, and kill(pid, 0)
+	// still reports a zombie as alive, so IsRunning() could never tell a dead
+	// screensaver from a live one.
+	go func(p ScreensaverProcess) {
+		err := p.Cmd.Wait()
+		if s.config.IsDebug() {
+			log.Printf("Screensaver on %s (PID %d) exited: %v", p.Output, p.PID, err)
+		}
+		close(p.done)
+	}(process)
 
 	if s.config.IsDebug() {
 		log.Printf("Launched screensaver on %s with PID: %d", outputName, process.PID)
@@ -106,42 +124,33 @@ func (s *SystemD) StopScreensaver() error {
 			}
 			// Fallback: direct kill if process group kill fails
 			_ = process.Cmd.Process.Kill()
-			process.Cmd.Wait()
-			continue
 		}
 
-		// Step 2: Wait up to 2s for graceful exit
-		done := make(chan error, 1)
-		go func() {
-			done <- process.Cmd.Wait()
-		}()
-
-		select {
-		case <-done:
-			// Process exited gracefully
+		// Step 2: Wait up to 2s for graceful exit. The reaper goroutine owns
+		// the Cmd's Wait, so exit is observed through the done channel.
+		if process.waitExit(2 * time.Second) {
 			if s.config.IsDebug() {
 				log.Printf("PID %d exited gracefully via SIGTERM", pid)
 			}
-		case <-time.After(2 * time.Second):
-			// Step 3: Force kill the process group
+			continue
+		}
+
+		// Step 3: Force kill the process group
+		if s.config.IsDebug() {
+			log.Printf("PID %d did not exit after SIGTERM, sending SIGKILL", pid)
+		}
+		if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil {
 			if s.config.IsDebug() {
-				log.Printf("PID %d did not exit after SIGTERM, sending SIGKILL", pid)
+				log.Printf("SIGKILL to process group -%d failed: %v", pid, err)
 			}
-			if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil {
-				if s.config.IsDebug() {
-					log.Printf("SIGKILL to process group -%d failed: %v", pid, err)
-				}
-				// Last resort: direct process kill
-				_ = process.Cmd.Process.Kill()
-			}
-			// Wait for process to be reaped (with timeout)
-			select {
-			case <-done:
-				// Reaped
-			case <-time.After(1 * time.Second):
-				log.Printf("WARNING: PID %d could not be reaped after SIGKILL", pid)
-				lastError = fmt.Errorf("failed to reap PID %d", pid)
-			}
+			// Last resort: direct process kill
+			_ = process.Cmd.Process.Kill()
+		}
+
+		// Wait for process to be reaped (with timeout)
+		if !process.waitExit(1 * time.Second) {
+			log.Printf("WARNING: PID %d could not be reaped after SIGKILL", pid)
+			lastError = fmt.Errorf("failed to reap PID %d", pid)
 		}
 	}
 
@@ -164,19 +173,67 @@ func (s *SystemD) IsRunning() bool {
 		return false
 	}
 
-	// Check if at least one process is still running via signal 0
-	stillRunning := []ScreensaverProcess{}
+	// Drop processes that have exited. kill(pid, 0) cannot be used for this:
+	// it still succeeds for a zombie, which is exactly the state a
+	// screensaver that exited on its own is left in.
+	stillRunning := make([]ScreensaverProcess, 0, len(s.processes))
 	for _, process := range s.processes {
-		if err := syscall.Kill(process.PID, 0); err == nil {
-			// Process is still running
-			stillRunning = append(stillRunning, process)
+		if process.exited() {
+			if s.config.IsDebug() {
+				log.Printf("Screensaver on %s (PID %d) is no longer running, dropping it",
+					process.Output, process.PID)
+			}
+			continue
 		}
+		stillRunning = append(stillRunning, process)
 	}
 
 	// Update processes list to only include running processes
 	s.processes = stillRunning
 
 	return len(s.processes) > 0
+}
+
+// exited reports whether the process has exited and been reaped already.
+func (p ScreensaverProcess) exited() bool {
+	if p.done == nil {
+		// No reaper goroutine, so fall back to a signal 0 probe.
+		return syscall.Kill(p.PID, 0) != nil
+	}
+
+	select {
+	case <-p.done:
+		return true
+	default:
+		return false
+	}
+}
+
+// waitExit waits up to timeout for the process to exit. It returns false if
+// the process is still running when the timeout elapses.
+func (p ScreensaverProcess) waitExit(timeout time.Duration) bool {
+	if p.done == nil {
+		// No reaper goroutine: reap here, once.
+		reaped := make(chan struct{})
+		go func() {
+			p.Cmd.Wait()
+			close(reaped)
+		}()
+
+		select {
+		case <-reaped:
+			return true
+		case <-time.After(timeout):
+			return false
+		}
+	}
+
+	select {
+	case <-p.done:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
 }
 
 // GetPIDs returns the process IDs of all running screensavers

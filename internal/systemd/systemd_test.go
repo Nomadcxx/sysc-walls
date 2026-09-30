@@ -165,6 +165,43 @@ func TestStopScreensaver_GracefulBeforeForce(t *testing.T) {
 	}
 }
 
+// TestIsRunning_ReapsSelfExitedProcess verifies that a screensaver which exits
+// on its own (a crashed display, for example) is reaped rather than left as a
+// zombie, and stops being reported as running. kill(pid, 0) cannot detect
+// this: it still succeeds for a zombie.
+func TestIsRunning_ReapsSelfExitedProcess(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux-only test")
+	}
+
+	s := newTestSystemD()
+
+	// A stand-in for a display that exits by itself before it is stopped.
+	if err := s.LaunchScreensaver("sleep", []string{"0.05"}, "crashed-output"); err != nil {
+		t.Fatalf("Failed to launch test process: %v", err)
+	}
+
+	s.mu.Lock()
+	pid := s.processes[0].PID
+	s.mu.Unlock()
+
+	// Give the process time to exit and the reaper time to notice.
+	deadline := time.Now().Add(3 * time.Second)
+	for s.IsRunning() && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	if s.IsRunning() {
+		t.Error("IsRunning() still reports an exited screensaver as running")
+	}
+	if err := syscall.Kill(pid, 0); err == nil {
+		t.Errorf("PID %d still present after exit — child was not reaped", pid)
+	}
+	if n := s.GetProcessCount(); n != 0 {
+		t.Errorf("GetProcessCount() = %d, want 0 after the exited process is pruned", n)
+	}
+}
+
 func TestMultipleLaunchStopCycles(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Linux-only test")

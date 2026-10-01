@@ -576,7 +576,9 @@ func isSafePath(path string) bool {
 	}
 
 	for _, prefix := range allowedPrefixes {
-		if strings.HasPrefix(cleanPath, prefix) {
+		// The match must respect a path-component boundary: "/usr/shareX" is
+		// not inside "/usr/share" even though it shares the textual prefix.
+		if cleanPath == prefix || strings.HasPrefix(cleanPath, prefix+string(filepath.Separator)) {
 			return true
 		}
 	}

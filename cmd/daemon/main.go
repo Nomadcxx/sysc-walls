@@ -49,6 +49,9 @@ type Daemon struct {
 	// Atomic because the signal handler calls onActivity concurrently with Run.
 	// See configureFallbackTimer.
 	useFallbackTimer atomic.Bool
+
+	// detectCompositor is a test seam; nil means compositor.DetectCompositor.
+	detectCompositor func() (compositor.Compositor, error)
 }
 
 // NewDaemon creates a new daemon instance
@@ -299,6 +302,29 @@ func (d *Daemon) resetIdleTimer() {
 	d.idleTimer.Reset(d.config.GetIdleTimeout())
 }
 
+// getCompositor returns the compositor detected on the first successful
+// detection and reuses it afterwards. Failures are not cached, so a later
+// launch can retry. Keeping one instance lets per-compositor state (e.g. the
+// fullscreen rule Hyprland applies once) survive across launches.
+func (d *Daemon) getCompositor() (compositor.Compositor, error) {
+	if d.compositor != nil {
+		return d.compositor, nil
+	}
+
+	detect := d.detectCompositor
+	if detect == nil {
+		detect = compositor.DetectCompositor
+	}
+
+	comp, err := detect()
+	if err != nil {
+		return nil, err
+	}
+
+	d.compositor = comp
+	return comp, nil
+}
+
 // LaunchScreensaver starts the screensaver on all monitors
 func (d *Daemon) LaunchScreensaver() {
 	// Don't launch if already running
@@ -320,8 +346,9 @@ func (d *Daemon) LaunchScreensaver() {
 		log.Printf("Launching screensaver: %s %v", terminal, args)
 	}
 
-	// Detect compositor
-	comp, err := compositor.DetectCompositor()
+	// Reuse the compositor detected on an earlier launch, so per-compositor
+	// state survives screensaver restarts (see getCompositor).
+	comp, err := d.getCompositor()
 	if err != nil {
 		// Fallback: launch single instance without multi-monitor support
 		if d.debug {
@@ -332,9 +359,6 @@ func (d *Daemon) LaunchScreensaver() {
 		}
 		return
 	}
-
-	// Store compositor for cleanup later
-	d.compositor = comp
 
 	if d.debug {
 		log.Printf("Detected compositor: %s", comp.Name())

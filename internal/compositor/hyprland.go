@@ -5,10 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"sync"
 )
 
 // HyprlandCompositor implements the Compositor interface for Hyprland
-type HyprlandCompositor struct{}
+type HyprlandCompositor struct {
+	mu sync.Mutex
+	// applied records window classes whose fullscreen rule has been added.
+	// Rules persist in Hyprland until a reload and there is no way to remove
+	// an individual rule, so re-adding on every launch only duplicates it.
+	applied map[string]struct{}
+	// runHyprctl executes hyprctl with the given arguments; nil uses the real
+	// binary. Overridable in tests.
+	runHyprctl func(args ...string) error
+}
 
 // hyprlandMonitor represents a monitor in hyprctl's JSON output
 type hyprlandMonitor struct {
@@ -96,14 +106,38 @@ func (h *HyprlandCompositor) FocusOutput(name string) error {
 // PrepareFullscreen adds a window rule to force fullscreen for the given window class.
 // This is needed because Hyprland may tile windows instead of respecting the terminal's
 // fullscreen request (--start-as=fullscreen in kitty).
+//
+// The rule is added once per compositor instance: Hyprland rules persist until
+// a reload, so re-applying on every screensaver launch would only accumulate
+// duplicates. A failed application is not recorded, so the next launch retries.
 func (h *HyprlandCompositor) PrepareFullscreen(windowClass string) error {
+	h.mu.Lock()
+	_, alreadyApplied := h.applied[windowClass]
+	h.mu.Unlock()
+	if alreadyApplied {
+		return nil
+	}
+
 	// Add window rule to force fullscreen for windows with this class
 	// Using windowrulev2 with class matching for precise targeting
 	rule := fmt.Sprintf("fullscreen, class:(%s)", windowClass)
-	cmd := exec.Command("hyprctl", "keyword", "windowrulev2", rule)
-	if err := cmd.Run(); err != nil {
+	run := h.runHyprctl
+	if run == nil {
+		run = func(args ...string) error {
+			return exec.Command("hyprctl", args...).Run()
+		}
+	}
+	if err := run("keyword", "windowrulev2", rule); err != nil {
 		return fmt.Errorf("failed to add fullscreen window rule: %w", err)
 	}
+
+	h.mu.Lock()
+	if h.applied == nil {
+		h.applied = make(map[string]struct{})
+	}
+	h.applied[windowClass] = struct{}{}
+	h.mu.Unlock()
+
 	return nil
 }
 
@@ -115,5 +149,8 @@ func (h *HyprlandCompositor) CleanupFullscreen(windowClass string) error {
 	// The rule we added only affects windows with the specific class,
 	// so it's safe to leave it. If needed, we could use "hyprctl reload"
 	// but that would affect all user rules, which is too disruptive.
+	//
+	// The applied mark is intentionally kept: the rule is still in effect, so
+	// the next PrepareFullscreen for this class must not add it again.
 	return nil
 }

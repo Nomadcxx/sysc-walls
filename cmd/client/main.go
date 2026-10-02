@@ -106,7 +106,7 @@ func handleSetCommand(key, value string) {
 		os.Exit(1)
 	}
 
-	if err := cfg.SaveToFile(""); err != nil {
+	if err := cfg.SaveToFile(defaultConfigPath()); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: Failed to save config: %v\n", err)
 	}
 }
@@ -198,20 +198,25 @@ func handleStatusCommand() {
 
 // loadConfig loads the configuration from the default path
 func loadConfig() *config.Config {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to get home directory: %v\n", err)
-		os.Exit(1)
-	}
-
 	cfg := config.NewConfig()
-	configPath := filepath.Join(homeDir, ".config", "sysc-walls", "daemon.conf")
+	configPath := defaultConfigPath()
 	if err := cfg.LoadFromFile(configPath); err != nil {
 		// Use defaults if config doesn't exist
 		fmt.Fprintf(os.Stderr, "Warning: Could not load config from %s: %v\n", configPath, err)
 		fmt.Fprintf(os.Stderr, "Using default configuration\n")
 	}
 	return cfg
+}
+
+// defaultConfigPath returns the config path the client reads and writes, the
+// same path the daemon loads.
+func defaultConfigPath() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to get home directory: %v\n", err)
+		os.Exit(1)
+	}
+	return filepath.Join(homeDir, ".config", "sysc-walls", "daemon.conf")
 }
 
 // findDisplayBinary finds the sysc-walls-display binary

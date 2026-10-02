@@ -650,3 +650,82 @@ func TestLoadFromFile_IgnoresNonPositiveIdleTimeout(t *testing.T) {
 		t.Errorf("GetIdleTimeout() = %v, want the default %v", got, want)
 	}
 }
+
+// TestSaveToFile_ExpandsTildeHome verifies that the default path resolves
+// against the user's home directory rather than being created as a literal
+// "~" directory under the current working directory.
+func TestSaveToFile_ExpandsTildeHome(t *testing.T) {
+	home := t.TempDir()
+	cwd := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Chdir(cwd)
+
+	cfg := NewConfig()
+	cfg.SetAnimationEffect("matrix")
+
+	if err := cfg.SaveToFile(""); err != nil {
+		t.Fatalf("SaveToFile(\"\") error = %v", err)
+	}
+
+	want := filepath.Join(home, ".config", "sysc-walls", "daemon.conf")
+	if _, err := os.Stat(want); err != nil {
+		t.Errorf("expected config written to %s: %v", want, err)
+	}
+
+	if literal := filepath.Join(cwd, "~"); dirExists(literal) {
+		t.Errorf("SaveToFile created a literal %q directory in the CWD", literal)
+	}
+}
+
+// TestSaveToFile_ExplicitTildePath verifies that an explicit "~/" path is
+// expanded the same way the daemon and client resolve their default paths.
+func TestSaveToFile_ExplicitTildePath(t *testing.T) {
+	home := t.TempDir()
+	cwd := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Chdir(cwd)
+
+	cfg := NewConfig()
+	cfg.SetAnimationEffect("fire")
+
+	if err := cfg.SaveToFile("~/.config/sysc-walls/custom.conf"); err != nil {
+		t.Fatalf("SaveToFile() error = %v", err)
+	}
+
+	want := filepath.Join(home, ".config", "sysc-walls", "custom.conf")
+	if _, err := os.Stat(want); err != nil {
+		t.Errorf("expected config written to %s: %v", want, err)
+	}
+
+	if literal := filepath.Join(cwd, "~"); dirExists(literal) {
+		t.Errorf("SaveToFile created a literal %q directory in the CWD", literal)
+	}
+}
+
+// TestLoadFromFile_ExpandsTildeHome verifies the load side resolves "~" too,
+// so a default config is created under home and not under the CWD.
+func TestLoadFromFile_ExpandsTildeHome(t *testing.T) {
+	home := t.TempDir()
+	cwd := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Chdir(cwd)
+
+	cfg := NewConfig()
+	if err := cfg.LoadFromFile("~/.config/sysc-walls/daemon.conf"); err != nil {
+		t.Fatalf("LoadFromFile() error = %v", err)
+	}
+
+	want := filepath.Join(home, ".config", "sysc-walls", "daemon.conf")
+	if _, err := os.Stat(want); err != nil {
+		t.Errorf("expected default config created at %s: %v", want, err)
+	}
+
+	if literal := filepath.Join(cwd, "~"); dirExists(literal) {
+		t.Errorf("LoadFromFile created a literal %q directory in the CWD", literal)
+	}
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}

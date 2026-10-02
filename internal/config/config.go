@@ -82,10 +82,30 @@ func NewConfig() *Config {
 	}
 }
 
+// resolveConfigPath expands environment variables and a leading "~" in a
+// config path. os.ExpandEnv alone leaves "~" untouched, which would make a
+// path like "~/.config/sysc-walls/daemon.conf" relative to the current
+// working directory instead of the user's home.
+func resolveConfigPath(configPath string) string {
+	expandedPath := os.ExpandEnv(configPath)
+
+	if expandedPath == "~" || strings.HasPrefix(expandedPath, "~/") {
+		homeDir, err := os.UserHomeDir()
+		if err == nil && homeDir != "" {
+			if expandedPath == "~" {
+				return homeDir
+			}
+			return filepath.Join(homeDir, expandedPath[2:])
+		}
+	}
+
+	return expandedPath
+}
+
 // LoadFromFile loads configuration from a file
 func (c *Config) LoadFromFile(configPath string) error {
-	// Expand home directory if needed
-	expandedPath := os.ExpandEnv(configPath)
+	// Expand environment variables and home directory if needed
+	expandedPath := resolveConfigPath(configPath)
 
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(expandedPath)
@@ -377,12 +397,12 @@ func formatDuration(d time.Duration) string {
 
 // SaveToFile saves the configuration to a file
 func (c *Config) SaveToFile(configPath string) error {
-	// Expand home directory if needed
-	expandedPath := os.ExpandEnv(configPath)
+	// Expand environment variables and home directory if needed
+	expandedPath := resolveConfigPath(configPath)
 
 	// Use default path if not provided
 	if expandedPath == "" {
-		expandedPath = os.ExpandEnv("~/.config/sysc-walls/daemon.conf")
+		expandedPath = resolveConfigPath("~/.config/sysc-walls/daemon.conf")
 	}
 
 	// Create directory if it doesn't exist

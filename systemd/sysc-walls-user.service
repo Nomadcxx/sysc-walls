@@ -9,7 +9,7 @@ ExecStart=/usr/local/bin/sysc-walls-daemon -start
 Restart=on-failure
 RestartSec=5
 TimeoutStartSec=10
-TimeoutStopSec=10
+TimeoutStopSec=30
 
 [Install]
 WantedBy=graphical-session.target

@@ -1,12 +1,69 @@
 package main
 
 import (
+	"log"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/Nomadcxx/sysc-walls/internal/config"
 	"github.com/Nomadcxx/sysc-walls/pkg/idle"
 )
+
+// daemonLogPath returns where setupLogging writes for the given home dir.
+func daemonLogPath(home string) string {
+	return filepath.Join(home, ".local", "share", "sysc-walls", "daemon.log")
+}
+
+// TestSetupLogging_CreatesPrivateLogFile verifies the daemon log is created
+// owner-only instead of world-writable.
+func TestSetupLogging_CreatesPrivateLogFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	defer log.SetOutput(os.Stderr)
+
+	setupLogging()
+
+	info, err := os.Stat(daemonLogPath(home))
+	if err != nil {
+		t.Fatalf("daemon log not created: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("daemon log mode = %o, want 600", perm)
+	}
+}
+
+// TestSetupLogging_TightensExistingLogFile verifies that a log left
+// world-writable by an older version is tightened on the next start, since
+// O_CREATE only applies the mode when the file is created.
+func TestSetupLogging_TightensExistingLogFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	defer log.SetOutput(os.Stderr)
+
+	logFile := daemonLogPath(home)
+	if err := os.MkdirAll(filepath.Dir(logFile), 0o755); err != nil {
+		t.Fatalf("creating log dir: %v", err)
+	}
+	if err := os.WriteFile(logFile, []byte("old log\n"), 0o666); err != nil {
+		t.Fatalf("creating pre-existing log: %v", err)
+	}
+	// WriteFile is umask-masked; force the legacy mode explicitly.
+	if err := os.Chmod(logFile, 0o666); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+
+	setupLogging()
+
+	info, err := os.Stat(logFile)
+	if err != nil {
+		t.Fatalf("stat log: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("daemon log mode = %o after setupLogging, want 600", perm)
+	}
+}
 
 // newTestDaemon builds a daemon with a short idle timeout for timer tests.
 // The config parser only accepts whole seconds, so 1s is the shortest usable timeout.

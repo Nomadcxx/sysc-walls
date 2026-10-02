@@ -483,9 +483,15 @@ func setupLogging() {
 	}
 
 	logFile := filepath.Join(logDir, "daemon.log")
-	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		log.Fatalf("Failed to open log file: %v", err)
+	}
+
+	// OpenFile only applies the mode when it creates the file, so tighten
+	// permissions on a log left world-readable by an older version.
+	if err := os.Chmod(logFile, 0600); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not restrict %s to 0600: %v\n", logFile, err)
 	}
 
 	// Redirect stdout and stderr to log file

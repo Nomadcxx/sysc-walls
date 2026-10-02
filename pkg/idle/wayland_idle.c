@@ -122,7 +122,13 @@ int wayland_cgo_dispatch() {
 
 	// Read events from the socket
 	if (wl_display_read_events(display) < 0) {
-		wl_display_cancel_read(display);
+		// wl_display_read_events() consumes the read preparation taken by
+		// wl_display_prepare_read(): either read_events or cancel_read
+		// completes it, never both. Calling cancel_read here would release
+		// the read intention a second time and corrupt the display's reader
+		// bookkeeping (libwayland: "If the threads do not follow this rule
+		// it will lead to deadlock"). The connection is unusable after a
+		// read error, so let the caller tear it down instead.
 		return -3;
 	}
 
@@ -150,6 +156,10 @@ notification = NULL;
 if (idle_notifier) {
 ext_idle_notifier_v1_destroy(idle_notifier);
 idle_notifier = NULL;
+}
+if (seat) {
+wl_seat_destroy(seat);
+seat = NULL;
 }
 if (registry) {
 wl_registry_destroy(registry);

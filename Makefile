@@ -7,10 +7,16 @@
 all: build
 
 # Build all binaries
+# The version is stamped in from git so a build from a tagged tree reports the
+# tag; without git (release tarball, vendored copy) the literal in
+# internal/version is used unchanged.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//' | cut -d- -f1)
+LDFLAGS := -X github.com/Nomadcxx/sysc-walls/internal/version.Version=$(VERSION)
+
 build:
 	@echo "Building sysc-walls..."
-	@go build -o bin/sysc-walls-display cmd/display/main.go
-	@go build -o bin/sysc-walls-daemon cmd/daemon/main.go
+	@go build -ldflags "$(LDFLAGS)" -o bin/sysc-walls-display cmd/display/main.go
+	@go build -ldflags "$(LDFLAGS)" -o bin/sysc-walls-daemon cmd/daemon/main.go
 	@echo "✓ Build complete"
 	@echo "  Display: bin/sysc-walls-display"
 	@echo "  Daemon:  bin/sysc-walls-daemon"

@@ -158,12 +158,38 @@ func main() {
 
 	// Handle specific commands
 	if *start {
-		if *runAsDaemon {
-			// Daemonize the process
+		// Daemonize only in the launching process. The child Daemonize
+		// re-executed re-enters here with the same flags, and without the
+		// environment marker it would daemonize again — forking a further
+		// generation, or failing outright once it is already detached.
+		if *runAsDaemon && !daemonize.IsChild() {
+			// Daemonize exits this process on success, so nothing below it
+			// runs here.
 			d := daemonize.NewDaemon("sysc-walls-daemon")
 			if err := d.Daemonize(); err != nil {
 				log.Fatalf("Failed to daemonize: %v", err)
 			}
+		}
+
+		if *runAsDaemon {
+			// This process is the daemon. The PID file has to name the process
+			// that actually holds the idle loop, so it is written here rather
+			// than by the launcher that just exited.
+			d := daemonize.NewDaemon("sysc-walls-daemon")
+			if err := d.WritePidFile(); err != nil {
+				log.Fatalf("Failed to write PID file: %v", err)
+			}
+			// Remove it on the way out, so a graceful exit does not leave a
+			// stale file for the next start to argue with.
+			defer func() {
+				if err := d.CleanupPidFile(); err != nil && !os.IsNotExist(err) {
+					log.Printf("Warning: failed to remove PID file: %v", err)
+				}
+			}()
+
+			// stdio is /dev/null here, so anything logged has to be redirected
+			// to the log file first. This used to sit after the Daemonize call,
+			// where the launcher's os.Exit made it unreachable.
 			setupLogging()
 		}
 

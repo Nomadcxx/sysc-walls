@@ -7,9 +7,27 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
+
+// ChildEnvVar marks the process Daemonize re-executed.
+//
+// The re-executed child re-enters main with the same arguments, so without a
+// marker it would call Daemonize again: the second generation either sees
+// itself already detached and fatals, or forks a third. The flag on the
+// command line cannot express this, because the child legitimately needs the
+// same flags the launcher was given.
+const ChildEnvVar = "SYSC_WALLS_DAEMON_CHILD"
+
+// IsChild reports whether this process is the daemon that Daemonize
+// re-executed, rather than the process that started it. The caller uses it to
+// skip daemonising a second time and to know that it is the process that
+// should own the PID file.
+func IsChild() bool {
+	return os.Getenv(ChildEnvVar) == "1"
+}
 
 // Daemon represents a daemonized process
 type Daemon struct {
@@ -41,16 +59,21 @@ func isDaemon() bool {
 	return os.Getppid() == 1
 }
 
-// Daemonize starts the process as a daemon
+// Daemonize re-executes this program as a detached daemon and exits the
+// launching process. It never returns on success.
+//
+// It deliberately does not write the PID file. The PID that would be recorded
+// is the launcher's, and the launcher exits on the very next line, so the file
+// would name a process that is already gone. The child calls WritePidFile
+// instead, once it is the daemon.
 func (d *Daemon) Daemonize() error {
+	if IsChild() {
+		return fmt.Errorf("refusing to daemonize: this process is already the re-executed daemon child (%s is set)", ChildEnvVar)
+	}
+
 	// Check if we're already a daemon
 	if isDaemon() {
 		return fmt.Errorf("process is already a daemon")
-	}
-
-	// Create PID file
-	if err := d.createPidFile(); err != nil {
-		return fmt.Errorf("failed to create PID file: %w", err)
 	}
 
 	// Command to re-execute ourselves with --daemon flag
@@ -73,13 +96,17 @@ func (d *Daemon) Daemonize() error {
 
 	// Start the process in a new session and with redirected file descriptors
 	cmd := exec.Command(executable, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid:     true, // Create a new session
-		Setpgid:    true, // Create a new process group
-		Credential: nil,  // No credentials change
-	}
+	cmd.SysProcAttr = daemonProcAttr
 
-	// Redirect file descriptors
+	// The environment marker is what tells the child not to daemonize again.
+	cmd.Env = append(os.Environ(), ChildEnvVar+"=1")
+
+	// Detach from the launcher's working directory so the daemon is not tied
+	// to a directory the user may later remove.
+	cmd.Dir = "/"
+
+	// Redirect file descriptors. Leaving them nil makes os/exec open
+	// /dev/null, so the daemon never holds the launching terminal open.
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil
@@ -89,10 +116,29 @@ func (d *Daemon) Daemonize() error {
 		return fmt.Errorf("failed to start daemon: %w", err)
 	}
 
-	// Exit the parent process
+	// Exit the parent process. There is no return: callers must treat a nil
+	// error from Daemonize as unreachable.
 	os.Exit(0)
 
+	// Unreachable; present only because the compiler cannot see that
+	// os.Exit does not return.
 	return nil
+}
+
+// WritePidFile records this process as the running daemon.
+//
+// The caller must be the re-executed child — see IsChild. Recording the
+// launcher's PID would leave a file naming a process that has already exited,
+// which makes the singleton check never fire and makes Stop signal nothing.
+func (d *Daemon) WritePidFile() error {
+	return d.createPidFile()
+}
+
+// CleanupPidFile removes the PID file. The daemon should defer this so a
+// graceful exit does not leave a stale file behind for the next start to
+// argue with.
+func (d *Daemon) CleanupPidFile() error {
+	return d.removePidFile()
 }
 
 // createPidFile creates a PID file with the current process ID
@@ -103,6 +149,13 @@ func (d *Daemon) createPidFile() error {
 		runtimeDir = fmt.Sprintf("/run/user/%d", os.Getuid())
 	}
 	d.pidFile = filepath.Join(runtimeDir, fmt.Sprintf("%s.pid", d.name))
+
+	// /run/user/<uid> is created by logind, not by us, and XDG_RUNTIME_DIR may
+	// point somewhere that has not been made yet. Without this the failure
+	// surfaces as a bare "no such file or directory" from OpenFile.
+	if err := os.MkdirAll(runtimeDir, 0700); err != nil {
+		return fmt.Errorf("failed to create runtime directory %s: %w", runtimeDir, err)
+	}
 
 	// Try to create the PID file
 	file, err := os.OpenFile(d.pidFile, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644)
@@ -126,8 +179,12 @@ func (d *Daemon) createPidFile() error {
 				return fmt.Errorf("process already running with PID %d", pid)
 			}
 
-			// Remove the stale PID file
-			os.Remove(d.pidFile)
+			// Remove the stale PID file. A failure here is worth reporting:
+			// the recreate below would otherwise fail with a confusing
+			// "file exists" that looks like a second daemon.
+			if rmErr := os.Remove(d.pidFile); rmErr != nil && !os.IsNotExist(rmErr) {
+				return fmt.Errorf("failed to remove stale PID file %s: %w", d.pidFile, rmErr)
+			}
 
 			// Try again to create the PID file
 			file, err = os.OpenFile(d.pidFile, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644)
@@ -192,6 +249,14 @@ func (d *Daemon) Stop() error {
 		return nil
 	}
 
+	// A PID file records a number, and the operating system recycles those.
+	// Between a crash and the next start the recorded PID can name a
+	// completely unrelated process, and signalling it would be worse than
+	// failing to stop anything. Confirm it is still our binary.
+	if ours, checkable := isSameExecutable(pid); checkable && !ours {
+		return fmt.Errorf("PID %d from %s is no longer %s; refusing to signal it", pid, d.pidFile, d.name)
+	}
+
 	// Send TERM signal to gracefully stop the process
 	err = syscall.Kill(pid, syscall.SIGTERM)
 	if err != nil {
@@ -233,4 +298,30 @@ func containsFlag(args []string, flag string) bool {
 		}
 	}
 	return false
+}
+
+// isSameExecutable reports whether pid is running the same executable as this
+// process. The second return value is false when the question cannot be
+// answered — a non-Linux system, or a process we may not inspect — in which
+// case the caller should not treat a negative answer as a refusal.
+func isSameExecutable(pid int) (same bool, checkable bool) {
+	readLink := func(p string) (string, error) {
+		target, err := os.Readlink(p)
+		if err != nil {
+			return "", err
+		}
+		// A deleted binary is reported as "<path> (deleted)".
+		return strings.TrimSuffix(target, " (deleted)"), nil
+	}
+
+	self, err := readLink("/proc/self/exe")
+	if err != nil {
+		return false, false
+	}
+	other, err := readLink(fmt.Sprintf("/proc/%d/exe", pid))
+	if err != nil {
+		return false, false
+	}
+
+	return self == other, true
 }

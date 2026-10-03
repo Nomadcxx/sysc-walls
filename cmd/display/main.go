@@ -410,12 +410,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Final terminal size: %dx%d\n", width, height)
 	}
 
-	// Setup terminal
-	if !*noClear {
-		utils.SetupTerminal()
-	}
-	defer utils.RestoreTerminal()
-
 	// Load text content for text-based effects
 	activeEffect := *effect
 	var textContent string
@@ -423,12 +417,20 @@ func main() {
 		textContent = loadTextContent(*file, *debug)
 	}
 
-	// Create animation based on effect
+	// Create the animation before touching any terminal state. A bad effect or
+	// a size the effect cannot lay out fails here, and exiting at this point
+	// leaves the terminal exactly as it was found.
 	anim, err := animations.CreateAnimationWithText(activeEffect, width, height, *theme, textContent)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating animation: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Setup terminal
+	if !*noClear {
+		utils.SetupTerminal()
+	}
+	defer utils.RestoreTerminal()
 
 	// Setup signal handling for graceful shutdown and resize
 	c := make(chan os.Signal, 1)
@@ -479,8 +481,15 @@ func main() {
 		fmt.Printf("DateTime interval: %v\n", *datetimeInterval)
 	}
 
+	// quit is closed when the animation loop stops, for any reason: the signal
+	// handler, the end of a finite frame count, or a natural return. main owns
+	// shutdown so the deferred RestoreTerminal is the only exit path.
+	quit := make(chan struct{})
+
 	// Animation goroutine
 	go func() {
+		defer close(quit)
+
 		for frame < totalFrames || totalFrames == -1 {
 			select {
 			case <-ticker.C:
@@ -514,11 +523,13 @@ func main() {
 					lastClockText = clockText
 				}
 			case <-c:
-				// Received interrupt or termination signal
+				// Received interrupt or termination signal. Stop the loop and
+				// let main unwind, rather than exiting from here and
+				// bypassing the terminal restore.
 				if *debug {
 					fmt.Printf("Received interrupt, stopping after %d frames\n", frame)
 				}
-				os.Exit(0)
+				return
 			case <-sigwinch:
 				// Window was resized
 				newWidth, newHeight, err := utils.GetTerminalSize()
@@ -543,6 +554,6 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt or termination signal
-	<-c
+	// Wait for the animation loop to stop
+	<-quit
 }

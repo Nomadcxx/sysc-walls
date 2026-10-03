@@ -13,8 +13,38 @@ func CreateOptimizedAnimation(effect string, width, height int, theme string) (A
 	return CreateOptimizedAnimationWithText(effect, width, height, theme, "")
 }
 
+// Smallest drawing surface the effects can lay out without crashing.
+//
+// Two of them compute a rand.Intn argument that depends on the dimensions and
+// goes to zero or below on a small terminal: fireworks uses width-20, and
+// aquarium places fish in the range [height/15+2, height-10], which collapses
+// once the terminal is short. math/rand.Intn panics on n <= 0, which kills the
+// display process and leaves the terminal frozen on a partial frame.
+//
+// The clamp only engages below these bounds, where the alternative is a crash.
+// Any terminal at or above them is passed through untouched, so rendering for
+// real screens is unchanged.
+const (
+	minEffectWidth  = 21
+	minEffectHeight = 24
+)
+
+// clampEffectSize enforces the minimum drawing surface. Negative and zero
+// dimensions are treated the same as a too-small terminal.
+func clampEffectSize(width, height int) (int, int) {
+	if width < minEffectWidth {
+		width = minEffectWidth
+	}
+	if height < minEffectHeight {
+		height = minEffectHeight
+	}
+	return width, height
+}
+
 // CreateOptimizedAnimationWithText creates an optimized animation with custom text for text-based effects
 func CreateOptimizedAnimationWithText(effect string, width, height int, theme string, text string) (Animation, error) {
+	width, height = clampEffectSize(width, height)
+
 	palette := getThemePalette(theme)
 
 	// Default text if empty
@@ -109,6 +139,8 @@ func (m *optimizedMatrix) Render() string {
 }
 
 func (m *optimizedMatrix) Resize(width, height int) {
+	width, height = clampEffectSize(width, height)
+
 	m.effect.Resize(width, height)
 }
 
@@ -132,6 +164,8 @@ func (f *optimizedFire) Render() string {
 }
 
 func (f *optimizedFire) Resize(width, height int) {
+	width, height = clampEffectSize(width, height)
+
 	f.effect.Resize(width, height)
 }
 
@@ -155,6 +189,8 @@ func (f *optimizedFireText) Render() string {
 }
 
 func (f *optimizedFireText) Resize(width, height int) {
+	width, height = clampEffectSize(width, height)
+
 	f.effect.Resize(width, height)
 }
 
@@ -182,6 +218,8 @@ func (f *optimizedFireworks) Render() string {
 }
 
 func (f *optimizedFireworks) Resize(width, height int) {
+	width, height = clampEffectSize(width, height)
+
 	f.effect.Resize(width, height)
 }
 
@@ -205,6 +243,8 @@ func (r *optimizedRain) Render() string {
 }
 
 func (r *optimizedRain) Resize(width, height int) {
+	width, height = clampEffectSize(width, height)
+
 	r.effect.Resize(width, height)
 }
 
@@ -235,6 +275,8 @@ func (b *optimizedBeams) Render() string {
 }
 
 func (b *optimizedBeams) Resize(width, height int) {
+	width, height = clampEffectSize(width, height)
+
 	config := syscGo.BeamsConfig{
 		Width:             width,
 		Height:            height,
@@ -279,6 +321,8 @@ func (b *optimizedBeamText) Render() string {
 }
 
 func (b *optimizedBeamText) Resize(width, height int) {
+	width, height = clampEffectSize(width, height)
+
 	b.termWidth = width
 	b.termHeight = height
 	config := syscGo.BeamTextConfig{
@@ -328,6 +372,8 @@ func (d *optimizedDecrypt) Render() string {
 }
 
 func (d *optimizedDecrypt) Resize(width, height int) {
+	width, height = clampEffectSize(width, height)
+
 	config := syscGo.DecryptConfig{
 		Width:            width,
 		Height:           height,
@@ -373,6 +419,8 @@ func (p *optimizedPour) Render() string {
 }
 
 func (p *optimizedPour) Resize(width, height int) {
+	width, height = clampEffectSize(width, height)
+
 	config := syscGo.PourConfig{
 		Width:  width,
 		Height: height,
@@ -431,6 +479,8 @@ func (a *optimizedAquarium) Render() string {
 }
 
 func (a *optimizedAquarium) Resize(width, height int) {
+	width, height = clampEffectSize(width, height)
+
 	// Aquarium resize needs full reconfiguration
 	fishColors := a.palette[:minInt(len(a.palette), 3)]
 	waterColors := []string{"#2e3440", "#3b4252", "#434c5e"}
@@ -486,6 +536,8 @@ func (p *optimizedPrint) Render() string {
 }
 
 func (p *optimizedPrint) Resize(width, height int) {
+	width, height = clampEffectSize(width, height)
+
 	config := syscGo.PrintConfig{
 		Width:  width,
 		Height: height,
@@ -523,6 +575,8 @@ func (m *optimizedMatrixArt) Render() string {
 }
 
 func (m *optimizedMatrixArt) Resize(width, height int) {
+	width, height = clampEffectSize(width, height)
+
 	m.effect = syscGo.NewMatrixArtEffect(width, height, m.palette, m.text)
 }
 
@@ -555,6 +609,8 @@ func (r *optimizedRainArt) Render() string {
 }
 
 func (r *optimizedRainArt) Resize(width, height int) {
+	width, height = clampEffectSize(width, height)
+
 	r.effect = syscGo.NewRainArtEffect(width, height, r.palette, r.text)
 }
 
@@ -597,6 +653,8 @@ func (b *optimizedBlackhole) Render() string {
 }
 
 func (b *optimizedBlackhole) Resize(width, height int) {
+	width, height = clampEffectSize(width, height)
+
 	config := syscGo.BlackholeConfig{
 		Width:               width,
 		Height:              height,
@@ -648,6 +706,8 @@ func (r *optimizedRingText) Render() string {
 }
 
 func (r *optimizedRingText) Resize(width, height int) {
+	width, height = clampEffectSize(width, height)
+
 	config := syscGo.RingTextConfig{
 		Width:               width,
 		Height:              height,

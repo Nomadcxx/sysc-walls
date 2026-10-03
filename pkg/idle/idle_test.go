@@ -117,10 +117,10 @@ func TestDetectDisplayServer(t *testing.T) {
 	}()
 
 	tests := []struct {
-		name            string
-		waylandDisplay  string
-		x11Display      string
-		expectedServer  string
+		name           string
+		waylandDisplay string
+		x11Display     string
+		expectedServer string
 	}{
 		{
 			name:           "Wayland",
@@ -174,11 +174,11 @@ func TestDiscoverInputDevices(t *testing.T) {
 	// This test verifies the function doesn't panic
 	// Actual devices depend on system and permissions
 	devices, err := discoverInputDevices()
-	
+
 	if err != nil {
 		t.Logf("discoverInputDevices() error: %v (may be expected on systems without /dev/input)", err)
 	}
-	
+
 	t.Logf("Found %d input devices", len(devices))
 	for _, dev := range devices {
 		t.Logf("  - %s", dev)
@@ -216,9 +216,9 @@ func TestIdleDetector_IdleTimeout(t *testing.T) {
 func TestIdleDetector_ActivityResets(t *testing.T) {
 	cfg := config.NewConfig()
 	cfg.SetIdleTimeout("2s")
-	
+
 	detector := NewIdleDetector(cfg)
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -243,8 +243,6 @@ func TestIdleDetector_ActivityResets(t *testing.T) {
 		t.Log("Correctly did not receive idle event immediately")
 	}
 }
-
-
 
 // writeFakeXprintidle puts an executable named xprintidle in a fresh directory
 // and points PATH at it, so the X11 probe can be driven deterministically.
@@ -436,7 +434,11 @@ func TestStartWaylandIdleDetection_FallsBackWhenDetectorFails(t *testing.T) {
 			}
 			t.Cleanup(func() { newWaylandDetector = original })
 
-			// A working xprintidle, so the fallback has something to claim
+			// A Wayland session where the native idle protocol is missing, and
+			// a working xprintidle sitting right there. The fallback runs, but
+			// it must not claim the X clock here — see
+			// TestStartWaylandIdleDetection_DoesNotClaimX11InWaylandSession for
+			// why, and for the X11-session counterpart.
 			writeFakeXprintidle(t, "echo 500")
 			t.Setenv("WAYLAND_DISPLAY", "wayland-0")
 			t.Setenv("DISPLAY", ":0")
@@ -450,13 +452,52 @@ func TestStartWaylandIdleDetection_FallsBackWhenDetectorFails(t *testing.T) {
 				t.Error("Start() error = nil, want the Wayland failure reported")
 			}
 
-			if got := detector.NativeIdleSource(); got != SourceX11Xprintidle {
-				t.Errorf("NativeIdleSource() = %q, want %q: the fallback did not start", got, SourceX11Xprintidle)
-			}
-
 			if tt.wantStopped && (stub == nil || !stub.stopped) {
 				t.Error("the failed Wayland detector was not stopped, leaking its connection")
 			}
+
+			// The failure has to reach the caller so it can decide what to do.
+			// Deciding here is a bug: the X idle clock is not a valid source in
+			// a Wayland session, and claiming it reports idle during active
+			// use. Staying source-less leaves the daemon on its fallback timer
+			// or inert, both of which are recoverable.
+			if got := detector.NativeIdleSource(); got != "" {
+				t.Errorf("NativeIdleSource() = %q after a Wayland failure in a Wayland session, want empty", got)
+			}
 		})
+	}
+}
+
+// TestStartWaylandIdleDetection_DoesNotClaimX11InWaylandSession covers the
+// false-idle case that the test above deliberately avoids.
+//
+// With Xwayland running, the X server's idle clock never sees keystrokes made
+// in a native Wayland application. Falling back to it in a Wayland session
+// therefore reports idle while the user is working, which is the worst failure
+// this package has. Declining to claim it leaves the daemon on its fallback
+// timer, or inert — both better than a screensaver over live work.
+func TestStartWaylandIdleDetection_DoesNotClaimX11InWaylandSession(t *testing.T) {
+	original := newWaylandDetector
+	newWaylandDetector = func(time.Duration, func(), func()) (waylandDetector, error) {
+		return nil, errors.New("no ext-idle-notifier-v1")
+	}
+	t.Cleanup(func() { newWaylandDetector = original })
+
+	// A perfectly working xprintidle — it is still the wrong clock to trust.
+	writeFakeXprintidle(t, "echo 500")
+	t.Setenv("WAYLAND_DISPLAY", "wayland-0")
+	t.Setenv("DISPLAY", ":0")
+
+	detector := NewIdleDetector(config.NewConfig())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := detector.Start(ctx); err == nil {
+		t.Error("Start() error = nil, want the Wayland failure reported")
+	}
+
+	if got := detector.NativeIdleSource(); got != "" {
+		t.Errorf("NativeIdleSource() = %q in a Wayland session, want empty: the X idle clock does not observe native Wayland input", got)
 	}
 }

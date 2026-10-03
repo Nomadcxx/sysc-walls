@@ -34,11 +34,35 @@ type WaylandCGODetector struct {
 	cancel      context.CancelFunc
 	mu          sync.Mutex
 	initialized atomic.Bool
+	onLost      func()
 }
 
 // Global instance for CGO callbacks
 var globalDetector *WaylandCGODetector
 var globalDetectorMu sync.Mutex
+
+// SetOnLost registers a callback for the event loop ending unexpectedly.
+//
+// The loop can stop for reasons that have nothing to do with shutdown — a
+// compositor restart, a socket replacement, a protocol error. Once it does,
+// there is no idle source and no compositor resume, and nothing in the
+// process will ever notice on its own. The callback is how the owner finds
+// out and re-arms its fallback.
+func (w *WaylandCGODetector) SetOnLost(fn func()) {
+	w.mu.Lock()
+	w.onLost = fn
+	w.mu.Unlock()
+}
+
+// onLost fires the loss callback at most once per unexpected exit.
+func (w *WaylandCGODetector) reportLost() {
+	w.mu.Lock()
+	fn := w.onLost
+	w.mu.Unlock()
+	if fn != nil {
+		fn()
+	}
+}
 
 //export goIdleCallback
 func goIdleCallback() {
@@ -116,7 +140,17 @@ func (w *WaylandCGODetector) Start() error {
 		log.Println("Starting Wayland CGO event loop")
 		lastHeartbeat := time.Now()
 		pollCount := 0
-		
+
+		// Report why the loop ended. Once it returns there is no idle source
+		// and no resume source, so the caller has to know to fall back rather
+		// than sit idle forever with the fallback timer disabled.
+		defer func() {
+			if w.ctx.Err() == nil {
+				log.Println("Wayland event loop ended while the detector was still expected to be running")
+				w.reportLost()
+			}
+		}()
+
 		for {
 			select {
 			case <-w.ctx.Done():
@@ -130,7 +164,7 @@ func (w *WaylandCGODetector) Start() error {
 						Events: unix.POLLIN,
 					},
 				}
-				
+
 				// Poll with 100ms timeout to allow checking ctx
 				n, err := unix.Poll(pollFds, 100)
 				if err != nil {
@@ -141,16 +175,29 @@ func (w *WaylandCGODetector) Start() error {
 					log.Printf("Poll error: %v", err)
 					return
 				}
-				
-				if n > 0 && (pollFds[0].Revents&unix.POLLIN) != 0 {
-					// Dispatch pending events
-					dispatchRet := C.wayland_cgo_dispatch()
-					if dispatchRet < 0 {
-						log.Printf("Wayland dispatch error: %d", dispatchRet)
+
+				if n > 0 {
+					revents := pollFds[0].Revents
+
+					// POLLHUP means the peer closed the socket. Without this
+					// test the POLLIN check below simply fails, nothing is
+					// dispatched, and poll returns immediately again — a tight
+					// loop that burns a core and reports nothing.
+					if revents&(unix.POLLHUP|unix.POLLERR|unix.POLLNVAL) != 0 {
+						log.Printf("Wayland connection closed (revents=0x%x), stopping event loop", revents)
 						return
 					}
+
+					if revents&unix.POLLIN != 0 {
+						// Dispatch pending events
+						dispatchRet := C.wayland_cgo_dispatch()
+						if dispatchRet < 0 {
+							log.Printf("Wayland dispatch error: %d", dispatchRet)
+							return
+						}
+					}
 				}
-				
+
 				// Heartbeat logging every 5 minutes
 				pollCount++
 				if time.Since(lastHeartbeat) >= 5*time.Minute {

@@ -11,10 +11,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	evdev "github.com/gvalkov/golang-evdev"
 	"github.com/Nomadcxx/sysc-walls/internal/config"
+	evdev "github.com/gvalkov/golang-evdev"
 )
 
 // IdleDetector handles system idle detection
@@ -26,12 +27,41 @@ type IdleDetector struct {
 	idleChan    chan struct{}
 	resumeChan  chan struct{}
 	nativeIdle  string
+
+	// lostChan is signalled when the native Wayland event loop ends
+	// unexpectedly. The caller has to re-evaluate its idle source when that
+	// happens, because nothing else in the process will notice.
+	lostChan chan struct{}
+
+	// hasActivity records whether anything at all can report a resume event:
+	// the Wayland listener, the X11 poller, or an evdev device. It is
+	// separate from nativeIdle, which only records sources that report idle on
+	// their own. The caller needs both, because a screensaver launched with
+	// no way to report activity cannot be dismissed once it is up.
+	hasActivity atomic.Bool
+
+	// lastResumeSignal coalesces resume events. See signalResume.
+	lastResumeSignal time.Time
 }
+
+// resumeCoalesceWindow is the minimum gap between resume events.
+//
+// A resume event's only job is to tell the consumer that nothing should be
+// showing. The consumer may shell out to do it, and the evdev monitor sees
+// every key repeat and every mouse-move packet, so an unthrottled resume per
+// event turns ordinary typing into a stream of subprocess spawns. One event
+// per window conveys exactly the same information.
+const resumeCoalesceWindow = 250 * time.Millisecond
 
 // Events provides channels for idle and resume events
 type Events struct {
 	Idle   chan struct{}
 	Resume chan struct{}
+
+	// Lost fires when a native idle source ends unexpectedly. The caller
+	// should re-evaluate which idle source is in charge; it will not be
+	// told again.
+	Lost chan struct{}
 }
 
 // NewIdleDetector creates a new idle detector
@@ -39,9 +69,10 @@ func NewIdleDetector(cfg *config.Config) *IdleDetector {
 	return &IdleDetector{
 		config:      cfg,
 		idleTimeout: cfg.GetIdleTimeout(),
-		idleChan:    make(chan struct{}, 10),  // Larger buffer to prevent drops
-		resumeChan:  make(chan struct{}, 10),  // Larger buffer to prevent drops
+		idleChan:    make(chan struct{}, 10), // Larger buffer to prevent drops
+		resumeChan:  make(chan struct{}, 10), // Larger buffer to prevent drops
 		lastActive:  time.Now(),
+		lostChan:    make(chan struct{}, 1),
 	}
 }
 
@@ -50,6 +81,16 @@ func (d *IdleDetector) Events() *Events {
 	return &Events{
 		Idle:   d.idleChan,
 		Resume: d.resumeChan,
+		Lost:   d.lostChan,
+	}
+}
+
+// reportLost records that the native idle source stopped working and wakes the
+// caller so it can re-arm its fallback.
+func (d *IdleDetector) reportLost() {
+	select {
+	case d.lostChan <- struct{}{}:
+	default:
 	}
 }
 
@@ -81,6 +122,53 @@ func (d *IdleDetector) setNativeIdleSource(name string) {
 	d.mu.Lock()
 	d.nativeIdle = name
 	d.mu.Unlock()
+}
+
+// clearNativeIdleSource records that a source which was reporting idle has
+// stopped working.
+func (d *IdleDetector) clearNativeIdleSource() {
+	d.mu.Lock()
+	d.nativeIdle = ""
+	d.mu.Unlock()
+}
+
+// signalResume delivers a resume event, throttled to at most one per
+// resumeCoalesceWindow. It never blocks.
+func (d *IdleDetector) signalResume() {
+	now := time.Now()
+
+	d.mu.Lock()
+	if now.Sub(d.lastResumeSignal) < resumeCoalesceWindow {
+		d.mu.Unlock()
+		return
+	}
+	d.lastResumeSignal = now
+	d.mu.Unlock()
+
+	select {
+	case d.resumeChan <- struct{}{}:
+	default:
+		// Channel already has a value, don't block
+	}
+}
+
+// markHasActivity records that a resume-capable source is running.
+func (d *IdleDetector) markHasActivity() {
+	d.hasActivity.Store(true)
+}
+
+// HasActivitySource reports whether any running source can emit a resume
+// event, meaning a screensaver would be dismissable once launched.
+//
+// This is deliberately not the same question as NativeIdleSource. That one
+// asks whether something reports idle by itself; this one asks whether
+// anything at all can tell us the user came back. With neither available, a
+// wall-clock timer would still expire during active use and the screensaver
+// it launches could only be cleared by stopping the daemon.
+//
+// Valid once Start has returned.
+func (d *IdleDetector) HasActivitySource() bool {
+	return d.hasActivity.Load()
 }
 
 // Start starts the idle detector
@@ -160,7 +248,7 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 		d.mu.Lock()
 		d.lastActive = time.Now()
 		d.mu.Unlock()
-		
+
 		// Fire resume event
 		select {
 		case d.resumeChan <- struct{}{}:
@@ -201,6 +289,20 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 	// The compositor now owns idle timing via ext-idle-notify-v1
 	d.setNativeIdleSource(SourceWaylandIdleNotify)
 
+	// The compositor's resumed event is the primary activity signal.
+	d.markHasActivity()
+
+	// If that event loop ever ends without the detector being stopped, the
+	// source is gone. Clear it and tell the caller, because the fallback
+	// decision is made once at startup and would otherwise leave the daemon
+	// with no idle source for the rest of its life.
+	if setter, ok := detector.(interface{ SetOnLost(func()) }); ok {
+		setter.SetOnLost(func() {
+			d.clearNativeIdleSource()
+			d.reportLost()
+		})
+	}
+
 	// Also start direct input device monitoring as a backup
 	// This catches cases where compositor's idle detection has issues (e.g., niri multi-monitor)
 	log.Println("Starting input device monitoring as backup for Wayland")
@@ -238,9 +340,25 @@ func (d *IdleDetector) startX11Monitor(ctx context.Context) {
 		return
 	}
 
+	// xprintidle reports the X server's idle clock, and that clock only tracks
+	// input delivered to the X server. In a Wayland session that is not the
+	// same thing as the user's activity: with Xwayland running, keystrokes in
+	// a native Wayland application never reach it, so the X clock keeps
+	// climbing while the user types. Claiming the idle source here would then
+	// report idle over live work, which is the worst failure this package has.
+	//
+	// So the source is only claimed when this really is an X session. The
+	// activity monitors started above are unaffected either way, and the
+	// caller's fallback timer stays armed when we decline to claim it.
+	if os.Getenv("WAYLAND_DISPLAY") != "" {
+		log.Println("X11 idle detection not used in a Wayland session: the X server's idle clock does not observe native Wayland input")
+		return
+	}
+
 	// xprintidle reports real idle time, so the poller emits idle events on
 	// its own once the configured timeout elapses
 	d.setNativeIdleSource(SourceX11Xprintidle)
+	d.markHasActivity()
 
 	// Start xprintidle monitoring in a goroutine
 	go func() {
@@ -276,11 +394,7 @@ func (d *IdleDetector) startX11Monitor(ctx context.Context) {
 					}
 				} else {
 					// We're active, fire resume event and clear idle
-					select {
-					case d.resumeChan <- struct{}{}:
-					default:
-						// Channel already has a value, don't block
-					}
+					d.signalResume()
 
 					// Clear any pending idle event
 					select {
@@ -297,10 +411,30 @@ func (d *IdleDetector) startX11Monitor(ctx context.Context) {
 	}()
 }
 
+// xprintidleTimeout bounds a single xprintidle invocation. The command talks
+// to an X server over a socket; if that server stops responding it can block
+// indefinitely, and a blocking Output() would wedge the caller — including the
+// synchronous startup probe, which would stop the daemon reaching its event
+// loop at all while still looking alive to systemd.
+const xprintidleTimeout = 2 * time.Second
+
 // readXprintidle runs xprintidle once and returns the idle time it reports.
+// It is bounded by xprintidleTimeout and gives up rather than hanging.
 func readXprintidle(path string) (time.Duration, error) {
-	output, err := exec.Command(path).Output()
+	ctx, cancel := context.WithTimeout(context.Background(), xprintidleTimeout)
+	defer cancel()
+
+	// WaitDelay matters as much as the context here. Killing the process on
+	// timeout is not enough on its own: if anything it spawned still holds the
+	// output pipe, Wait blocks on that pipe and the timeout never takes
+	// effect. WaitDelay bounds that second wait.
+	cmd := exec.CommandContext(ctx, path)
+	cmd.WaitDelay = time.Second
+	output, err := cmd.Output()
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return 0, fmt.Errorf("%s did not respond within %v", path, xprintidleTimeout)
+		}
 		return 0, fmt.Errorf("running %s: %w", path, err)
 	}
 
@@ -347,19 +481,14 @@ func (d *IdleDetector) startInputDeviceMonitor(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-activityChan:
-			// Activity detected on any device
+			// Activity detected on any device. MarkActive updates the activity
+			// clock and sends a throttled resume; the second, unconditional
+			// send this used to have doubled the event rate for no gain.
 			d.MarkActive()
 
-			// Fire resume event immediately
-			select {
-			case d.resumeChan <- struct{}{}:
-				// Only log if debug is enabled AND it's been >5 seconds since last log
-				if d.config.IsDebug() && time.Since(lastLogTime) > 5*time.Second {
-					log.Println("Input device activity detected")
-					lastLogTime = time.Now()
-				}
-			default:
-				// Channel already has a value, don't block
+			if d.config.IsDebug() && time.Since(lastLogTime) > 5*time.Second {
+				log.Println("Input device activity detected")
+				lastLogTime = time.Now()
 			}
 
 			// Clear any pending idle event
@@ -417,6 +546,10 @@ func discoverInputDevices() ([]string, error) {
 // monitorDevice monitors a single input device for events
 func (d *IdleDetector) monitorDevice(ctx context.Context, devicePath string, activityChan chan<- struct{}) {
 	device, err := evdev.Open(devicePath)
+	if err == nil {
+		// This device is really being watched, so a resume can arrive.
+		d.markHasActivity()
+	}
 	if err != nil {
 		if d.config.IsDebug() {
 			log.Printf("Failed to open device %s: %v", devicePath, err)
@@ -482,8 +615,10 @@ func (d *IdleDetector) startInputDevicePolling(ctx context.Context) {
 		return
 	}
 
-	// Last resort: just rely on timer-based idle detection
-	log.Println("Warning: No reliable activity detection method available")
+	// Last resort: nothing can report activity. The caller checks
+	// HasActivitySource and will not arm a timer that would launch a
+	// screensaver nothing can dismiss.
+	log.Println("No activity detection source available: the screensaver will not be launched automatically")
 }
 
 // hasXprintidle checks if xprintidle command is available
@@ -518,14 +653,12 @@ func (d *IdleDetector) monitorX11Idle(ctx context.Context) {
 
 			// If idle time decreased, activity was detected
 			if lastIdleTime > 0 && idleTimeMs < lastIdleTime {
+				// MarkActive already sends the throttled resume; this used to
+				// send a second, unconditional one on top of it.
 				d.MarkActive()
 
-				select {
-				case d.resumeChan <- struct{}{}:
-					if d.config.IsDebug() {
-						log.Println("X11 activity detected")
-					}
-				default:
+				if d.config.IsDebug() {
+					log.Println("X11 activity detected")
 				}
 
 				select {
@@ -546,11 +679,7 @@ func (d *IdleDetector) MarkActive() {
 	d.mu.Unlock()
 
 	// Fire resume event if we're currently idle
-	select {
-	case d.resumeChan <- struct{}{}:
-	default:
-		// Channel already has a value, don't block
-	}
+	d.signalResume()
 
 	// Clear any pending idle event
 	select {
@@ -562,4 +691,3 @@ func (d *IdleDetector) MarkActive() {
 		log.Println("System activity detected")
 	}
 }
-

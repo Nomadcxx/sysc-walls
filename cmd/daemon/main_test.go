@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"path/filepath"
@@ -102,6 +103,7 @@ func TestConfigureFallbackTimer_NativeSource(t *testing.T) {
 	t.Parallel()
 
 	d := newTestDaemon(t)
+	d.idleDet = &fakeIdleSource{native: idle.SourceWaylandIdleNotify, activity: true}
 
 	// Arm it first, so this exercises the teardown rather than a timer that
 	// was never running in the first place.
@@ -123,6 +125,7 @@ func TestResetIdleTimer_NativeSource(t *testing.T) {
 	t.Parallel()
 
 	d := newTestDaemon(t)
+	d.idleDet = &fakeIdleSource{native: idle.SourceX11Xprintidle, activity: true}
 
 	d.configureFallbackTimer(idle.SourceX11Xprintidle)
 	d.resetIdleTimer()
@@ -136,6 +139,9 @@ func TestConfigureFallbackTimer_NoNativeSource(t *testing.T) {
 	t.Parallel()
 
 	d := newTestDaemon(t)
+	// No native idle source, but activity is still observable, which is the
+	// case the wall-clock timer is safe in.
+	d.idleDet = &fakeIdleSource{native: "", activity: true}
 
 	start := time.Now()
 	d.configureFallbackTimer("")
@@ -198,5 +204,73 @@ func TestEventLoop_IgnoresTickWithoutFallback(t *testing.T) {
 	case <-launched:
 		t.Fatal("event loop acted on a fallback tick while native idle detection was active")
 	case <-time.After(500 * time.Millisecond):
+	}
+}
+
+// fakeIdleSource lets the fallback decision be tested without a live session.
+// The real detector only reports an activity source once one of its monitors
+// has actually started, which cannot happen in a unit test.
+type fakeIdleSource struct {
+	native   string
+	activity bool
+	events   *idle.Events
+}
+
+func (f *fakeIdleSource) Start(ctx context.Context) error { return nil }
+func (f *fakeIdleSource) NativeIdleSource() string        { return f.native }
+func (f *fakeIdleSource) HasActivitySource() bool         { return f.activity }
+func (f *fakeIdleSource) Events() *idle.Events {
+	if f.events == nil {
+		f.events = &idle.Events{
+			Idle:   make(chan struct{}, 1),
+			Resume: make(chan struct{}, 1),
+			Lost:   make(chan struct{}, 1),
+		}
+	}
+	return f.events
+}
+
+// TestConfigureFallbackTimer_NoActivitySourceStaysInert covers the fail-closed
+// half of #48: with nothing able to report that the user came back, the
+// wall-clock timer would launch a screensaver that nothing can dismiss, so it
+// must not arm.
+func TestConfigureFallbackTimer_NoActivitySourceStaysInert(t *testing.T) {
+	t.Parallel()
+
+	d := newTestDaemon(t)
+	d.idleDet = &fakeIdleSource{native: "", activity: false}
+
+	d.configureFallbackTimer("")
+
+	if d.useFallbackTimer.Load() {
+		t.Error("useFallbackTimer = true with no activity source; that timer can only produce an undismissable screensaver")
+	}
+	assertTimerQuiet(t, d, "fallback timer fired with no activity source")
+}
+
+// TestConfigureFallbackTimer_NoNativeButActivityPresent is the degraded case
+// that must keep working: no source reports idle on its own, but activity can
+// still be observed, so the wall-clock timer is safe to arm.
+func TestConfigureFallbackTimer_NoNativeButActivityPresent(t *testing.T) {
+	t.Parallel()
+
+	d := newTestDaemon(t)
+	d.idleDet = &fakeIdleSource{native: "", activity: true}
+
+	start := time.Now()
+	d.configureFallbackTimer("")
+
+	if !d.useFallbackTimer.Load() {
+		t.Fatal("useFallbackTimer = false, want true when activity can be observed")
+	}
+
+	select {
+	case <-d.idleTimer.C:
+	case <-time.After(3 * time.Second):
+		t.Fatal("fallback timer never fired with a working activity source")
+	}
+
+	if elapsed := time.Since(start); elapsed < 900*time.Millisecond || elapsed > 2*time.Second {
+		t.Errorf("fallback timer fired after %v, want ~%v", elapsed, d.config.GetIdleTimeout())
 	}
 }

@@ -41,7 +41,7 @@ type Daemon struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 	systemD    *systemd.SystemD
-	idleDet    *idle.IdleDetector
+	idleDet    idleSource
 	compositor compositor.Compositor
 	debug      bool
 
@@ -195,6 +195,16 @@ func main() {
 	showUsage()
 }
 
+// idleSource is the part of the idle detector the daemon depends on. It is an
+// interface so the fallback decision can be tested without a live session and
+// without a real detector.
+type idleSource interface {
+	Start(ctx context.Context) error
+	NativeIdleSource() string
+	HasActivitySource() bool
+	Events() *idle.Events
+}
+
 // Run starts the main daemon loop
 func (d *Daemon) Run() {
 	// Start idle detector for timing-based detection
@@ -239,6 +249,13 @@ func (d *Daemon) eventLoop() {
 				log.Println("Timer triggered idle (fallback)")
 			}
 			d.onIdle()
+		case <-d.idleDet.Events().Lost:
+			// A native idle source stopped working — a compositor restart or a
+			// dropped connection. The fallback decision was made once at
+			// startup, so without this the daemon would sit with no idle source
+			// and never launch a screensaver again.
+			log.Println("Native idle source was lost, re-evaluating fallback")
+			d.configureFallbackTimer(d.idleDet.NativeIdleSource())
 		}
 	}
 }
@@ -275,6 +292,21 @@ func (d *Daemon) onIdle() {
 // would still emit resume is the evdev backup monitor, which needs read access
 // to /dev/input/event* and silently degrades to polling without it. See #24.
 func (d *Daemon) configureFallbackTimer(nativeIdleSource string) {
+	// Fail closed when nothing can report that the user came back. The timer
+	// measures wall clock, so it will expire during active use; without a
+	// resume source the screensaver it launches could only be cleared by
+	// stopping the daemon. Staying inert is the better failure.
+	//
+	// The timer is stopped explicitly rather than just left alone: a previous
+	// call may have armed it, and an armed timer keeps firing regardless of
+	// this flag.
+	if !d.idleDet.HasActivitySource() {
+		d.useFallbackTimer.Store(false)
+		d.idleTimer.Stop()
+		log.Printf("No activity detection source available, idle screensaver disabled (idle source: %q)", nativeIdleSource)
+		return
+	}
+
 	useFallback := nativeIdleSource == ""
 	d.useFallbackTimer.Store(useFallback)
 

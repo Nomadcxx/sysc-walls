@@ -35,10 +35,35 @@ func spawnFakeScreensaver(t *testing.T) *exec.Cmd {
 		_ = cmd.Wait()
 	})
 
-	// Give the shell time to exec, so the spoofed argv is in place.
-	time.Sleep(150 * time.Millisecond)
+	// Wait for the exec to actually land, rather than assuming it has. Under
+	// load — the whole suite running in parallel, for instance — a fixed
+	// sleep is not enough, and a process still showing its raw shell command
+	// line does not match the sweep pattern, so the test would fail for a
+	// reason that has nothing to do with the code under test.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		spoofed := strings.Contains(readCmdline(t, cmd.Process.Pid), "sysc-walls-screensaver")
+		if spoofed {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("fake screensaver never took on the spoofed command line; got %q", readCmdline(t, cmd.Process.Pid))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	return cmd
+}
+
+// readCmdline returns a process's command line with NUL separators turned into
+// spaces.
+func readCmdline(t *testing.T, pid int) string {
+	t.Helper()
+	data, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/cmdline")
+	if err != nil {
+		return ""
+	}
+	return strings.ReplaceAll(strings.TrimRight(string(data), "\x00"), "\x00", " ")
 }
 
 // processRunning reports whether pid is a live process.
@@ -120,7 +145,13 @@ func TestCleanupOrphans_LeavesUnrelatedProcessesAlone(t *testing.T) {
 		_ = bystander.Process.Kill()
 		_ = bystander.Wait()
 	})
-	time.Sleep(150 * time.Millisecond)
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(readCmdline(t, bystander.Process.Pid), "my-regular-term") {
+		if time.Now().After(deadline) {
+			t.Fatalf("bystander never took on its spoofed command line; got %q", readCmdline(t, bystander.Process.Pid))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	if !processRunning(bystander.Process.Pid) {
 		t.Fatalf("precondition failed: bystander is not running")

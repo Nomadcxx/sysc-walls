@@ -17,15 +17,15 @@ import (
 
 // Theme colors - RAMA theme
 var (
-	BgBase       = lipgloss.Color("#2b2d42")  // RAMA Space cadet
-	Primary      = lipgloss.Color("#ef233c")  // RAMA Red Pantone
-	Secondary    = lipgloss.Color("#d90429")  // RAMA Fire engine red
-	Accent       = lipgloss.Color("#edf2f4")  // RAMA Anti-flash white
-	FgPrimary    = lipgloss.Color("#edf2f4")  // RAMA Anti-flash white
-	FgSecondary  = lipgloss.Color("#8d99ae")  // RAMA Cool gray
-	FgMuted      = lipgloss.Color("#8d99ae")  // RAMA Cool gray
-	ErrorColor   = lipgloss.Color("#d90429")  // RAMA Fire engine red
-	WarningColor = lipgloss.Color("#ef233c")  // RAMA Red Pantone
+	BgBase       = lipgloss.Color("#2b2d42") // RAMA Space cadet
+	Primary      = lipgloss.Color("#ef233c") // RAMA Red Pantone
+	Secondary    = lipgloss.Color("#d90429") // RAMA Fire engine red
+	Accent       = lipgloss.Color("#edf2f4") // RAMA Anti-flash white
+	FgPrimary    = lipgloss.Color("#edf2f4") // RAMA Anti-flash white
+	FgSecondary  = lipgloss.Color("#8d99ae") // RAMA Cool gray
+	FgMuted      = lipgloss.Color("#8d99ae") // RAMA Cool gray
+	ErrorColor   = lipgloss.Color("#d90429") // RAMA Fire engine red
+	WarningColor = lipgloss.Color("#ef233c") // RAMA Red Pantone
 )
 
 // Styles
@@ -631,16 +631,17 @@ func installBinaries(m *model) error {
 			return fmt.Errorf("failed to read binary %s: %v", component, err)
 		}
 
-		// Remove existing file first (if it exists) to avoid busy file error
-		if _, err := os.Stat(dstPath); err == nil {
-			if err := os.Remove(dstPath); err != nil {
-				return fmt.Errorf("failed to remove existing binary %s: %v", component, err)
-			}
+		// Write to a temporary file in the same directory and rename it into
+		// place. Removing the old binary first leaves a window where
+		// /usr/local/bin/sysc-walls-daemon does not exist while the enabled
+		// unit still points at it; rename is atomic within a filesystem, so
+		// the path is never absent.
+		tmpPath := dstPath + ".new"
+		if err := os.WriteFile(tmpPath, data, 0755); err != nil {
+			return fmt.Errorf("failed to stage binary %s at %s: %v", component, tmpPath, err)
 		}
-
-		// Write to destination
-		err = os.WriteFile(dstPath, data, 0755)
-		if err != nil {
+		if err := os.Rename(tmpPath, dstPath); err != nil {
+			os.Remove(tmpPath)
 			return fmt.Errorf("failed to install binary %s to %s: %v", component, dstPath, err)
 		}
 
@@ -662,55 +663,91 @@ func installBinaries(m *model) error {
 	return nil
 }
 
-func updateConfig(m *model) error {
-	// Get the actual user's home directory (not root when using sudo)
-	var homeDir string
+// resolveUserHome returns the home directory of the user being installed for,
+// and their uid and gid.
+//
+// The passwd database is the authority here, not $HOME and not
+// "/home/"+name: homes do not have to live under /home, and a lookup that
+// guesses produces a config in one tree and a unit file in another, or writes
+// the unit into root's own user manager when the installer is run as root
+// directly.
+func resolveUserHome() (homeDir string, uid, gid int, err error) {
 	sudoUser := os.Getenv("SUDO_USER")
 
-	if sudoUser != "" {
-		// Running with sudo - get actual user's home from SUDO_USER
-		// Use getent to properly get home directory (handles non-standard home dirs)
-		cmd := exec.Command("getent", "passwd", sudoUser)
-		output, err := cmd.Output()
-		if err == nil {
-			// Format: username:x:uid:gid:gecos:home:shell
-			fields := strings.Split(strings.TrimSpace(string(output)), ":")
-			if len(fields) >= 6 {
-				homeDir = fields[5]
-			}
-		}
-		// Fallback to /home/$SUDO_USER if getent fails
-		if homeDir == "" {
-			homeDir = "/home/" + sudoUser
-		}
-	} else {
-		// Not running with sudo - use $HOME environment variable
+	if sudoUser == "" {
+		// Not running under sudo: the invoking user is the target.
 		homeDir = os.Getenv("HOME")
 		if homeDir == "" {
-			return fmt.Errorf("HOME environment variable is not set")
+			return "", 0, 0, fmt.Errorf("HOME environment variable is not set")
+		}
+		uid, gid = os.Getuid(), os.Getgid()
+		return homeDir, uid, gid, nil
+	}
+
+	output, cmdErr := exec.Command("getent", "passwd", sudoUser).Output()
+	if cmdErr != nil {
+		// Fall back to the conventional path, but say so: a wrong guess here
+		// silently scatters the install.
+		homeDir = "/home/" + sudoUser
+		logLine := fmt.Sprintf("getent passwd %s failed (%v); assuming %s", sudoUser, cmdErr, homeDir)
+		fmt.Fprintln(os.Stderr, "Warning: "+logLine)
+	} else if fields := strings.Split(strings.TrimSpace(string(output)), ":"); len(fields) >= 6 {
+		// Format: username:x:uid:gid:gecos:home:shell
+		homeDir = fields[5]
+		uid, _ = strconv.Atoi(fields[2])
+		gid, _ = strconv.Atoi(fields[3])
+	}
+
+	if homeDir == "" {
+		return "", 0, 0, fmt.Errorf("could not determine home directory for %s", sudoUser)
+	}
+
+	// getent is authoritative for the home, but re-read the ids from `id` so
+	// ownership is right even if the passwd line was unusual.
+	if out, err := exec.Command("id", "-u", sudoUser).Output(); err == nil {
+		if v, err := strconv.Atoi(strings.TrimSpace(string(out))); err == nil {
+			uid = v
 		}
 	}
+	if out, err := exec.Command("id", "-g", sudoUser).Output(); err == nil {
+		if v, err := strconv.Atoi(strings.TrimSpace(string(out))); err == nil {
+			gid = v
+		}
+	}
+
+	return homeDir, uid, gid, nil
+}
+
+// nextFreeBackupPath returns a backup path for configPath that does not
+// already exist.
+//
+// The first candidate keeps the historical ".backup" name so existing users
+// and documentation still line up; later candidates are numbered, so a second
+// install cannot overwrite the first backup — which would replace the only
+// copy of the user's real settings with the defaults the first run wrote.
+func nextFreeBackupPath(configPath string) string {
+	backupPath := configPath + ".backup"
+	for i := 1; ; i++ {
+		if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+			return backupPath
+		}
+		backupPath = fmt.Sprintf("%s.backup.%d", configPath, i)
+	}
+}
+
+func updateConfig(m *model) error {
+	// Get the actual user's home directory (not root when using sudo)
+	homeDir, uid, gid, err := resolveUserHome()
+	if err != nil {
+		return err
+	}
+	sudoUser := os.Getenv("SUDO_USER")
 
 	// Config file path
 	configDir := filepath.Join(homeDir, ".config", "sysc-walls")
 	configPath := filepath.Join(configDir, "daemon.conf")
 
-	// Get actual user UID/GID for proper ownership
-	var uid, gid int
-	if sudoUser != "" {
-		// Get UID
-		cmd := exec.Command("id", "-u", sudoUser)
-		output, err := cmd.Output()
-		if err == nil {
-			uid, _ = strconv.Atoi(strings.TrimSpace(string(output)))
-		}
-		// Get GID
-		cmd = exec.Command("id", "-g", sudoUser)
-		output, err = cmd.Output()
-		if err == nil {
-			gid, _ = strconv.Atoi(strings.TrimSpace(string(output)))
-		}
-	}
+	// uid and gid came from resolveUserHome, which already read them.
 
 	// Validate home directory path doesn't contain literal ~ or other issues
 	if strings.Contains(homeDir, "~") {
@@ -862,7 +899,10 @@ fullscreen = true
 
 	// If config exists and we're overriding, back it up first
 	if configFileExists && m.overrideConfig {
-		backupPath := configPath + ".backup"
+		// A fixed name means a second run overwrites the only copy of the
+		// user's real settings with the defaults the first run left behind.
+		backupPath := nextFreeBackupPath(configPath)
+
 		data, err := os.ReadFile(configPath)
 		if err != nil {
 			return fmt.Errorf("failed to read existing config: %v", err)
@@ -876,6 +916,11 @@ fullscreen = true
 		if sudoUser != "" && uid > 0 {
 			os.Chown(backupPath, uid, gid)
 		}
+
+		// Tell the user where it went and how to put it back, rather than
+		// leaving a file that nothing reads.
+		fmt.Printf("    Existing config backed up to %s\n", backupPath)
+		fmt.Printf("    To restore it: cp %s %s\n\n", backupPath, configPath)
 	}
 
 	// Write new config
@@ -936,13 +981,13 @@ func importWaylandEnvironment(m *model) error {
 		cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", actualUID))
 	}
 
-	// Run the command, but don't fail if it doesn't work
-	// (user might be on X11 or environment might be set already)
+	// A failure here is not fatal — the user may genuinely be on X11 — but it
+	// must be visible. Reporting success while the service later starts
+	// without WAYLAND_DISPLAY means it exits and crash-loops every 5s.
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Failed to import WAYLAND_DISPLAY for systemd: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Output: %s\n", string(output))
-		fmt.Fprintf(os.Stderr, "This may affect compositor detection in the daemon\n")
+		return fmt.Errorf("failed to import WAYLAND_DISPLAY into the user systemd environment: %v\n%s\n"+
+			"The service may fail to detect the compositor. Run manually: systemctl --user import-environment WAYLAND_DISPLAY", err, output)
 	}
 
 	return nil
@@ -950,20 +995,24 @@ func importWaylandEnvironment(m *model) error {
 
 func installSystemdService(m *model) error {
 	srcPath := "systemd/sysc-walls-user.service"
-	
+
 	// Get the actual user's home directory and UID (not root when using sudo)
-	homeDir := os.Getenv("HOME")
-	sudoUser := os.Getenv("SUDO_USER")
-	if sudoUser != "" {
-		homeDir = "/home/" + sudoUser
+	// Resolve through the same helper updateConfig uses. They previously
+	// disagreed: one looked the home up in the passwd database, the other
+	// assumed /home/$SUDO_USER, so a user with a home elsewhere got the config
+	// in one tree and the unit file in another.
+	homeDir, targetUID, targetGID, err := resolveUserHome()
+	if err != nil {
+		return err
 	}
-	
+	sudoUser := os.Getenv("SUDO_USER")
+
 	// Create user systemd directory
 	userSystemdDir := filepath.Join(homeDir, ".config", "systemd", "user")
 	if err := os.MkdirAll(userSystemdDir, 0755); err != nil {
 		return fmt.Errorf("failed to create user systemd directory: %v", err)
 	}
-	
+
 	dstPath := filepath.Join(userSystemdDir, "sysc-walls.service")
 
 	// Read the source file
@@ -973,22 +1022,22 @@ func installSystemdService(m *model) error {
 	}
 
 	// Write to destination
-	err = os.WriteFile(dstPath, data, 0644)
-	if err != nil {
+	if err := os.WriteFile(dstPath, data, 0644); err != nil {
 		return fmt.Errorf("failed to install systemd service: %v", err)
 	}
 
-	// Get actual user UID for systemctl commands
-	actualUID := os.Getuid()
-	if sudoUser != "" {
-		// Get the UID of the sudo user
-		cmd := exec.Command("id", "-u", sudoUser)
-		output, err := cmd.Output()
-		if err == nil {
-			if uid, err := strconv.Atoi(strings.TrimSpace(string(output))); err == nil {
-				actualUID = uid
-			}
-		}
+	// Hand the unit to the user it belongs to. Every other file this
+	// installer writes is chowned; without it the user gets a root-owned unit
+	// in their own ~/.config/systemd/user and cannot edit, disable or remove
+	// it without sudo.
+	if err := os.Chown(dstPath, targetUID, targetGID); err != nil {
+		return fmt.Errorf("failed to set ownership on %s: %v", dstPath, err)
+	}
+
+	// The uid to run systemctl as.
+	actualUID := targetUID
+	if actualUID == 0 && sudoUser != "" {
+		actualUID = os.Getuid()
 	}
 
 	// Reload user systemd as the actual user
@@ -1003,9 +1052,8 @@ func installSystemdService(m *model) error {
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Failed to reload systemd daemon: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Output: %s\n", string(output))
-		fmt.Fprintf(os.Stderr, "You may need to run: systemctl --user daemon-reload\n")
+		return fmt.Errorf("failed to reload the user systemd manager: %v\n%s\n"+
+			"The new unit will not be picked up. Run manually: systemctl --user daemon-reload", err, output)
 	}
 
 	return nil
@@ -1037,12 +1085,8 @@ func enableSystemdService(m *model) error {
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		// Don't fail, but warn user
-		fmt.Fprintf(os.Stderr, "\nWarning: Failed to enable service automatically: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Output: %s\n", string(output))
-		fmt.Fprintf(os.Stderr, "You may need to run manually:\n")
-		fmt.Fprintf(os.Stderr, "  systemctl --user enable sysc-walls.service\n")
-		fmt.Fprintf(os.Stderr, "  systemctl --user start sysc-walls.service\n\n")
+		return fmt.Errorf("failed to enable the service: %v\n%s\n"+
+			"Run manually: systemctl --user enable --now sysc-walls.service", err, output)
 	}
 
 	return nil

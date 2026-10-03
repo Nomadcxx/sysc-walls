@@ -13,6 +13,8 @@ import (
 	"time"
 
 	syscGo "github.com/Nomadcxx/sysc-Go/animations"
+
+	"github.com/Nomadcxx/sysc-walls/internal/version"
 )
 
 // Available animation effects - auto-generated from sysc-Go registry
@@ -21,8 +23,11 @@ var AvailableEffects = syscGo.GetEffectNames()
 // Available color themes - auto-generated from sysc-Go registry
 var AvailableThemes = syscGo.GetThemeNames()
 
-// MinimumSyscGoVersion is the minimum required version of sysc-Go
-const MinimumSyscGoVersion = "1.0.3"
+// MinimumSyscGoVersion is the minimum required version of sysc-Go.
+//
+// It aliases version.MinSyscGoVersion so the advertised requirement and the
+// enforced one cannot drift apart again.
+const MinimumSyscGoVersion = version.MinSyscGoVersion
 
 // findDisplayBinary locates sysc-walls-display in standard locations
 func findDisplayBinary() (string, error) {

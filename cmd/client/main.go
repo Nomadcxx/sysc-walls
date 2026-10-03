@@ -76,39 +76,55 @@ func printUsage() {
 func handleSetCommand(key, value string) {
 	cfg := loadConfig()
 
+	// The confirmation is only printed once the change is on disk, so a failed
+	// write can never be reported as a success.
+	var confirm string
+
 	switch key {
 	case "effect":
-		cfg.SetAnimationEffect(value)
-		fmt.Printf("Set animation effect to: %s\n", value)
+		if err := cfg.SetAnimationEffect(value); err != nil {
+			fmt.Fprintf(os.Stderr, "Error setting effect: %v\n", err)
+			os.Exit(1)
+		}
+		confirm = fmt.Sprintf("Set animation effect to: %s", value)
 	case "theme":
-		cfg.SetAnimationTheme(value)
-		fmt.Printf("Set animation theme to: %s\n", value)
+		if err := cfg.SetAnimationTheme(value); err != nil {
+			fmt.Fprintf(os.Stderr, "Error setting theme: %v\n", err)
+			os.Exit(1)
+		}
+		confirm = fmt.Sprintf("Set animation theme to: %s", value)
 	case "timeout":
 		if err := cfg.SetIdleTimeout(value); err != nil {
 			fmt.Fprintf(os.Stderr, "Error setting timeout: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("Set idle timeout to: %s\n", value)
+		confirm = fmt.Sprintf("Set idle timeout to: %s", value)
 	case "kitty":
 		cfg.SetTerminalKitty(true)
-		fmt.Println("Terminal set to: kitty")
+		confirm = "Terminal set to: kitty"
 	case "xterm":
 		cfg.SetTerminalKitty(false)
-		fmt.Println("Terminal set to: xterm")
+		confirm = "Terminal set to: xterm"
 	case "fullscreen":
 		cfg.SetTerminalFullscreen(true)
-		fmt.Println("Display mode set to: fullscreen")
+		confirm = "Display mode set to: fullscreen"
 	case "windowed":
 		cfg.SetTerminalFullscreen(false)
-		fmt.Println("Display mode set to: windowed")
+		confirm = "Display mode set to: windowed"
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown config key: %s\n", key)
 		os.Exit(1)
 	}
 
+	// A failed save is a failure. Reporting it as a warning and exiting 0
+	// would tell the user their change took effect when the file on disk
+	// still holds the old value.
 	if err := cfg.SaveToFile(defaultConfigPath()); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Failed to save config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error saving config: %v\n", err)
+		os.Exit(1)
 	}
+
+	fmt.Println(confirm)
 }
 
 func handleRunCommand(args []string) {

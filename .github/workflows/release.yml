@@ -32,9 +32,13 @@ jobs:
           GOARCH: amd64
         run: |
           mkdir -p dist
-          go build -buildvcs=false -ldflags "-s -w" -o dist/sysc-walls-daemon ./cmd/daemon
-          go build -buildvcs=false -ldflags "-s -w" -o dist/sysc-walls-display ./cmd/display
-          go build -buildvcs=false -ldflags "-s -w" -o dist/sysc-walls-client ./cmd/client
+          # Stamp the tag into the binary so -version reports the release that
+          # was actually built instead of a literal that goes stale.
+          VERSION="${GITHUB_REF_NAME#v}"
+          LDFLAGS="-s -w -X github.com/Nomadcxx/sysc-walls/internal/version.Version=$VERSION"
+          go build -buildvcs=false -ldflags "$LDFLAGS" -o dist/sysc-walls-daemon ./cmd/daemon
+          go build -buildvcs=false -ldflags "$LDFLAGS" -o dist/sysc-walls-display ./cmd/display
+          go build -buildvcs=false -ldflags "$LDFLAGS" -o dist/sysc-walls-client ./cmd/client
 
       - name: Generate checksums
         run: |

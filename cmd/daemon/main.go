@@ -10,27 +10,28 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/Nomadcxx/sysc-walls/internal/compositor"
 	"github.com/Nomadcxx/sysc-walls/internal/config"
 	"github.com/Nomadcxx/sysc-walls/internal/systemd"
 	"github.com/Nomadcxx/sysc-walls/internal/version"
 	"github.com/Nomadcxx/sysc-walls/pkg/daemonize"
 	"github.com/Nomadcxx/sysc-walls/pkg/idle"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // RAMA theme colors matching installer
 var (
-	colorPrimary   = lipgloss.NewStyle().Foreground(lipgloss.Color("#ef233c"))        // RAMA Red Pantone
-	colorSecondary = lipgloss.NewStyle().Foreground(lipgloss.Color("#d90429"))        // RAMA Fire engine red
-	colorAccent    = lipgloss.NewStyle().Foreground(lipgloss.Color("#edf2f4"))        // RAMA Anti-flash white
-	colorMuted     = lipgloss.NewStyle().Foreground(lipgloss.Color("#8d99ae"))        // RAMA Cool gray
-	colorError     = lipgloss.NewStyle().Foreground(lipgloss.Color("#d90429"))        // RAMA Fire engine red
-	colorWarning   = lipgloss.NewStyle().Foreground(lipgloss.Color("#ef233c"))        // RAMA Red Pantone
+	colorPrimary   = lipgloss.NewStyle().Foreground(lipgloss.Color("#ef233c")) // RAMA Red Pantone
+	colorSecondary = lipgloss.NewStyle().Foreground(lipgloss.Color("#d90429")) // RAMA Fire engine red
+	colorAccent    = lipgloss.NewStyle().Foreground(lipgloss.Color("#edf2f4")) // RAMA Anti-flash white
+	colorMuted     = lipgloss.NewStyle().Foreground(lipgloss.Color("#8d99ae")) // RAMA Cool gray
+	colorError     = lipgloss.NewStyle().Foreground(lipgloss.Color("#d90429")) // RAMA Fire engine red
+	colorWarning   = lipgloss.NewStyle().Foreground(lipgloss.Color("#ef233c")) // RAMA Red Pantone
 	colorBold      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ef233c"))
 )
 
@@ -44,6 +45,13 @@ type Daemon struct {
 	idleDet    *idle.IdleDetector
 	compositor compositor.Compositor
 	debug      bool
+
+	// compositorMu guards compositor. The signal handler calls onActivity
+	// concurrently with Run, and onActivity reaches StopScreensaver, which
+	// reads the compositor that the event loop assigns in LaunchScreensaver.
+	// That was an unsynchronised interface write against an unsynchronised
+	// read; useFallbackTimer below is atomic for exactly the same reason.
+	compositorMu sync.RWMutex
 
 	// useFallbackTimer is true only when no native idle source is available.
 	// Atomic because the signal handler calls onActivity concurrently with Run.
@@ -299,6 +307,41 @@ func (d *Daemon) resetIdleTimer() {
 	d.idleTimer.Reset(d.config.GetIdleTimeout())
 }
 
+// activityPending reports whether the user has already come back, consuming
+// the queued resume event so the event loop does not act on it a second time.
+//
+// Only safe to call from the event-loop goroutine, where nothing else is
+// draining the channel.
+func (d *Daemon) activityPending() bool {
+	select {
+	case <-d.idleDet.Events().Resume:
+		return true
+	default:
+		return false
+	}
+}
+
+// waitForActivity waits up to dur for the user to come back. It returns false
+// if they did, or if the daemon is shutting down.
+//
+// This is the alternative to sleeping through a compositor settle delay: the
+// launch sequence runs on the event-loop goroutine, so a blind sleep makes a
+// screensaver the user has already dismissed sit there for the remainder of
+// the delay.
+func (d *Daemon) waitForActivity(dur time.Duration) bool {
+	timer := time.NewTimer(dur)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		return true
+	case <-d.idleDet.Events().Resume:
+		return false
+	case <-d.ctx.Done():
+		return false
+	}
+}
+
 // LaunchScreensaver starts the screensaver on all monitors
 func (d *Daemon) LaunchScreensaver() {
 	// Don't launch if already running
@@ -334,7 +377,7 @@ func (d *Daemon) LaunchScreensaver() {
 	}
 
 	// Store compositor for cleanup later
-	d.compositor = comp
+	d.setCompositor(comp)
 
 	if d.debug {
 		log.Printf("Detected compositor: %s", comp.Name())
@@ -380,6 +423,18 @@ func (d *Daemon) LaunchScreensaver() {
 	// Launch screensaver on each output using sequential focusing
 	// Use longer delays for better reliability across different compositors
 	for i, output := range outputs {
+		// The event loop is inside this function, so nothing else can drain
+		// the resume channel while the sequence below runs. If the user has
+		// already come back, stop putting up windows for a session that
+		// ended and tear down what has been launched so far.
+		if d.activityPending() {
+			if d.debug {
+				log.Println("Activity detected mid-launch, stopping early")
+			}
+			d.StopScreensaver()
+			return
+		}
+
 		if d.debug {
 			log.Printf("Launching on output %d/%d: %s", i+1, len(outputs), output.Name)
 		}
@@ -409,7 +464,16 @@ func (d *Daemon) LaunchScreensaver() {
 
 	// Give all windows substantial time to fully initialize and become fullscreen
 	// This is critical for proper multi-monitor rendering in all compositors
-	time.Sleep(600 * time.Millisecond)
+	//
+	// Stop waiting at once if the user has already returned; sitting out the
+	// full delay would leave the screens they dismissed still on screen.
+	if !d.waitForActivity(600 * time.Millisecond) {
+		if d.debug {
+			log.Println("Activity detected while settling, stopping early")
+		}
+		d.StopScreensaver()
+		return
+	}
 
 	// Restore original focus
 	if originalFocus != "" {
@@ -436,6 +500,20 @@ func (d *Daemon) LaunchScreensaver() {
 	}
 }
 
+// setCompositor records the detected compositor for later cleanup.
+func (d *Daemon) setCompositor(comp compositor.Compositor) {
+	d.compositorMu.Lock()
+	d.compositor = comp
+	d.compositorMu.Unlock()
+}
+
+// getCompositor returns the detected compositor, or nil.
+func (d *Daemon) getCompositor() compositor.Compositor {
+	d.compositorMu.RLock()
+	defer d.compositorMu.RUnlock()
+	return d.compositor
+}
+
 // StopScreensaver stops the screensaver
 func (d *Daemon) StopScreensaver() {
 	if d.debug {
@@ -447,8 +525,8 @@ func (d *Daemon) StopScreensaver() {
 	}
 
 	// Clean up fullscreen window rules
-	if d.compositor != nil {
-		if err := d.compositor.CleanupFullscreen("sysc-walls-screensaver"); err != nil {
+	if comp := d.getCompositor(); comp != nil {
+		if err := comp.CleanupFullscreen("sysc-walls-screensaver"); err != nil {
 			log.Printf("Warning: Failed to cleanup fullscreen rules: %v", err)
 		}
 	}

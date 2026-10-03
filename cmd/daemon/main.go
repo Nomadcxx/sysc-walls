@@ -197,6 +197,15 @@ func main() {
 
 // Run starts the main daemon loop
 func (d *Daemon) Run() {
+	// Clear out any screensaver left behind by a previous run before doing
+	// anything else. A screensaver outlives its daemon whenever the daemon
+	// dies without running its shutdown path, and it is started in its own
+	// process group specifically so group-kills work — which also means it
+	// survives. This daemon's process list is empty, so without this sweep an
+	// orphan would cover the screen and a second screensaver would be launched
+	// on top of it the next time the user goes idle.
+	d.systemD.CleanupOrphans()
+
 	// Start idle detector for timing-based detection
 	if err := d.idleDet.Start(d.ctx); err != nil {
 		log.Printf("Failed to start idle detector: %v", err)

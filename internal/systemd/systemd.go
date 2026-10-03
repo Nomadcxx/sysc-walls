@@ -83,6 +83,34 @@ func (s *SystemD) LaunchScreensaver(terminal string, args []string, outputName s
 	return nil
 }
 
+// screensaverClassPattern matches the command line of a screensaver instance
+// as built by GetScreensaverCommand: the terminal, then --class, then the
+// class name. It is deliberately specific so the sweep cannot hit unrelated
+// windows.
+const screensaverClassPattern = "kitty.*--class.*sysc-walls-screensaver"
+
+// sweepOrphanedScreensavers kills any screensaver instance this process is
+// not tracking. It must never fail a caller: a sweep that cannot run is not a
+// reason to refuse launching a screensaver.
+func (s *SystemD) sweepOrphanedScreensavers() {
+	if s.config.IsDebug() {
+		log.Println("Sweeping for untracked screensaver instances")
+	}
+
+	// pkill exits 1 when nothing matched, which is the common case and is not
+	// worth surfacing.
+	killCmd := exec.Command("pkill", "-f", screensaverClassPattern)
+	_ = killCmd.Run()
+}
+
+// CleanupOrphans removes screensaver instances left behind by a previous run.
+// The daemon calls this once at startup, before idle detection begins, so a
+// screensaver that outlived its daemon is removed before a second one can be
+// launched on top of it.
+func (s *SystemD) CleanupOrphans() {
+	s.sweepOrphanedScreensavers()
+}
+
 // StopScreensaver stops all screensaver processes
 func (s *SystemD) StopScreensaver() error {
 	s.mu.Lock()
@@ -96,13 +124,12 @@ func (s *SystemD) StopScreensaver() error {
 		if s.config.IsDebug() {
 			log.Println("No tracked processes, trying pkill anyway")
 		}
-		// Edge case fallback: Process tracking may be empty if:
-		// 1. Daemon crashed and restarted, losing track of existing processes
-		// 2. Processes were started by a different mechanism
-		// 3. Service stopped but processes lingered
-		// Use pkill as best-effort cleanup for orphaned screensaver instances
-		killCmd := exec.Command("pkill", "-f", "kitty.*--class.*sysc-walls-screensaver")
-		_ = killCmd.Run() // best-effort, ignore error
+		// Sweep for instances this daemon is not tracking. Screensaver children
+		// are started with Setpgid, so they survive an abrupt end to the daemon
+		// (crash, SIGKILL, OOM) and keep a fullscreen window on the user's
+		// screen that no input can dismiss. A daemon that starts with an empty
+		// process list cannot tell those apart from "nothing is running".
+		s.sweepOrphanedScreensavers()
 		return nil
 	}
 

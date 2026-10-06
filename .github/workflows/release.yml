@@ -25,6 +25,9 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Install wayland dev headers
+        run: sudo apt-get update && sudo apt-get install -y libwayland-dev
+
       - name: Build linux binaries
         env:
           GOOS: linux

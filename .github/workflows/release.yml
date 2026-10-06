@@ -25,9 +25,8 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build static binaries
+      - name: Build linux binaries
         env:
-          CGO_ENABLED: "0"
           GOOS: linux
           GOARCH: amd64
         run: |

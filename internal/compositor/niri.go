@@ -40,8 +40,9 @@ func (n *NiriCompositor) ListOutputs() ([]Output, error) {
 
 // parseOutputs parses niri's text output format
 // Example output:
-//   Output "eDP-1" (eDP-1)
-//   Output "HDMI-A-0" (HDMI-A-0)
+//
+//	Output "eDP-1" (eDP-1)
+//	Output "HDMI-A-0" (HDMI-A-0)
 func (n *NiriCompositor) parseOutputs(output string) ([]Output, error) {
 	outputs := []Output{}
 	lines := strings.Split(output, "\n")

@@ -13,17 +13,17 @@ import (
 )
 
 type WaylandIdleDetector struct {
-	display       *client.Display
-	registry      *client.Registry
-	idleNotifier  *ext_idle_notify.IdleNotifier
-	seat          *client.Seat
-	notification  *ext_idle_notify.IdleNotification
-	timeout       time.Duration
-	onIdle        func()
-	onResume      func()
-	mu            sync.Mutex
-	ctx           context.Context
-	cancel        context.CancelFunc
+	display      *client.Display
+	registry     *client.Registry
+	idleNotifier *ext_idle_notify.IdleNotifier
+	seat         *client.Seat
+	notification *ext_idle_notify.IdleNotification
+	timeout      time.Duration
+	onIdle       func()
+	onResume     func()
+	mu           sync.Mutex
+	ctx          context.Context
+	cancel       context.CancelFunc
 }
 
 func NewWaylandIdleDetector(timeout time.Duration, onIdle func(), onResume func()) (*WaylandIdleDetector, error) {

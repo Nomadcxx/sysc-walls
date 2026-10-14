@@ -17,10 +17,10 @@ var ErrNoFocusControl = errors.New("compositor cannot move focus between outputs
 
 // Output represents a display output/monitor
 type Output struct {
-	Name       string // Connector name (e.g., "DP-1", "HDMI-A-0")
-	Width      int
-	Height     int
-	Focused    bool
+	Name    string // Connector name (e.g., "DP-1", "HDMI-A-0")
+	Width   int
+	Height  int
+	Focused bool
 }
 
 // Compositor interface for compositor-specific operations

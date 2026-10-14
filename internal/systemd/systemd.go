@@ -286,5 +286,3 @@ func (s *SystemD) GetProcessCount() int {
 	defer s.mu.Unlock()
 	return len(s.processes)
 }
-
-

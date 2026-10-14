@@ -413,9 +413,9 @@ func TestNiriGetFocusedOutputParsing(t *testing.T) {
 // TestCompositorName tests that each compositor returns correct name
 func TestCompositorName(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		compositor Compositor
-		wantName  string
+		wantName   string
 	}{
 		{
 			name:       "hyprland",

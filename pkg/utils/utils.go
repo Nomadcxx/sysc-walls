@@ -37,7 +37,7 @@ func GetTerminalSize() (int, int, error) {
 	ttyFile, err := os.Open("/dev/tty")
 	if err == nil {
 		defer ttyFile.Close()
-		
+
 		retCode, _, errno = syscall.Syscall(syscall.SYS_IOCTL,
 			ttyFile.Fd(),
 			uintptr(syscall.TIOCGWINSZ),

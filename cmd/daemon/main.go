@@ -430,21 +430,26 @@ func (d *Daemon) LaunchScreensaver() {
 		log.Printf("Launching screensaver: %s %v", terminal, args)
 	}
 
-	// Detect compositor
-	comp, err := compositor.DetectCompositor()
-	if err != nil {
-		// Fallback: launch single instance without multi-monitor support
-		if d.debug {
-			log.Printf("Compositor detection failed: %v, launching single instance", err)
+	// Detect the compositor, or reuse the one from an earlier launch. The same
+	// instance is what makes per-compositor state survive across screensaver
+	// launches: Hyprland's fullscreen rule can only be added once, because
+	// there is no way to remove it again (#38).
+	comp := d.getCompositor()
+	if comp == nil {
+		detected, err := compositor.DetectCompositor()
+		if err != nil {
+			// Fallback: launch single instance without multi-monitor support
+			if d.debug {
+				log.Printf("Compositor detection failed: %v, launching single instance", err)
+			}
+			if err := d.systemD.LaunchScreensaver(terminal, args, "default"); err != nil {
+				log.Printf("Failed to launch screensaver: %v", err)
+			}
+			return
 		}
-		if err := d.systemD.LaunchScreensaver(terminal, args, "default"); err != nil {
-			log.Printf("Failed to launch screensaver: %v", err)
-		}
-		return
+		comp = detected
+		d.setCompositor(comp)
 	}
-
-	// Store compositor for cleanup later
-	d.setCompositor(comp)
 
 	if d.debug {
 		log.Printf("Detected compositor: %s", comp.Name())

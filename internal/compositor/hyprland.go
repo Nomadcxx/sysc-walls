@@ -5,10 +5,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"sync"
 )
 
 // HyprlandCompositor implements the Compositor interface for Hyprland
-type HyprlandCompositor struct{}
+type HyprlandCompositor struct {
+	// fullscreenMu guards fullscreenApplied. Hyprland has no way to remove one
+	// window rule at a time, so the rule is added once and stays for the rest of
+	// the Hyprland session; re-adding it on every screensaver launch would
+	// append a duplicate each time (#38).
+	fullscreenMu      sync.Mutex
+	fullscreenApplied bool
+
+	// runHyprctl runs one hyprctl invocation. nil means the real binary, so
+	// production is unchanged; a test substitutes it.
+	runHyprctl func(args ...string) error
+}
 
 // hyprlandMonitor represents a monitor in hyprctl's JSON output
 type hyprlandMonitor struct {
@@ -96,15 +108,38 @@ func (h *HyprlandCompositor) FocusOutput(name string) error {
 // PrepareFullscreen adds a window rule to force fullscreen for the given window class.
 // This is needed because Hyprland may tile windows instead of respecting the terminal's
 // fullscreen request (--start-as=fullscreen in kitty).
+//
+// The rule is applied once per compositor instance. CleanupFullscreen cannot
+// remove it, so applying it again on the next launch would only append a
+// duplicate rule for the same class. A failed application is not recorded, so
+// the next launch retries exactly as before.
 func (h *HyprlandCompositor) PrepareFullscreen(windowClass string) error {
-	// Add window rule to force fullscreen for windows with this class
-	// Using windowrulev2 with class matching for precise targeting
-	rule := fmt.Sprintf("fullscreen, class:(%s)", windowClass)
-	cmd := exec.Command("hyprctl", "keyword", "windowrulev2", rule)
-	if err := cmd.Run(); err != nil {
+	h.fullscreenMu.Lock()
+	defer h.fullscreenMu.Unlock()
+	if h.fullscreenApplied {
+		return nil
+	}
+
+	// windowrulev2 was removed in Hyprland 0.53; the current parser only
+	// accepts "windowrulev2 is deprecated" and does nothing with it, so the
+	// old call was a silent no-op and the screensaver stayed tiled. The
+	// replacement is a windowrule value of "match:<prop> <value>, <effect>
+	// <value>"; the fields are comma separated and each is trimmed.
+	rule := fmt.Sprintf("match:class %s, fullscreen on", windowClass)
+	if err := h.hyprctl("keyword", "windowrule", rule); err != nil {
 		return fmt.Errorf("failed to add fullscreen window rule: %w", err)
 	}
+	h.fullscreenApplied = true
 	return nil
+}
+
+// hyprctl runs hyprctl with the given arguments, or the substituted runner
+// when a test installed one.
+func (h *HyprlandCompositor) hyprctl(args ...string) error {
+	if h.runHyprctl != nil {
+		return h.runHyprctl(args...)
+	}
+	return exec.Command("hyprctl", args...).Run()
 }
 
 // CleanupFullscreen removes the fullscreen window rule for the given class.

@@ -2,10 +2,18 @@
 package compositor
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
+
+// ErrNoFocusControl reports a compositor that offers clients no way to move
+// keyboard focus between outputs. labwc has no IPC at all, so the daemon
+// cannot place a window on a chosen output and has to settle for the one
+// that already holds focus.
+var ErrNoFocusControl = errors.New("compositor cannot move focus between outputs")
 
 // Output represents a display output/monitor
 type Output struct {
@@ -73,5 +81,15 @@ func DetectCompositor() (Compositor, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("no supported compositor detected (tried niri, hyprland, sway)")
+	// Try labwc. It exports LABWC_PID to every client it starts and sets
+	// XDG_CURRENT_DESKTOP to "labwc:wlroots"; wlr-randr then reports the
+	// outputs. It comes last because wlr-randr answers on any wlroots
+	// compositor, and the environment is what tells labwc apart.
+	if os.Getenv("LABWC_PID") != "" || strings.HasPrefix(os.Getenv("XDG_CURRENT_DESKTOP"), "labwc") {
+		if _, err := exec.LookPath("wlr-randr"); err == nil {
+			return NewLabwcCompositor(), nil
+		}
+	}
+
+	return nil, fmt.Errorf("no supported compositor detected (tried niri, hyprland, sway, labwc)")
 }

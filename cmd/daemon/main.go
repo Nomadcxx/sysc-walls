@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -513,6 +514,17 @@ func (d *Daemon) LaunchScreensaver() {
 
 		// Focus this output
 		if err := comp.FocusOutput(output.Name); err != nil {
+			if errors.Is(err, compositor.ErrNoFocusControl) {
+				// Nothing was launched yet, because focus cannot be
+				// moved and the first output is where it failed. Put a
+				// single instance on screen rather than looping past
+				// every output and leaving the screens bare.
+				log.Printf("%s cannot move focus between outputs, launching single instance: %v", comp.Name(), err)
+				if err := d.systemD.LaunchScreensaver(terminal, args, "default"); err != nil {
+					log.Printf("Failed to launch screensaver: %v", err)
+				}
+				return
+			}
 			log.Printf("Failed to focus output %s: %v", output.Name, err)
 			continue
 		}

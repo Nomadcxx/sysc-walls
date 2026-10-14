@@ -33,14 +33,23 @@ jobs:
           GOOS: linux
           GOARCH: amd64
         run: |
+          set -euo pipefail
           mkdir -p dist
           # Stamp the tag into the binary so -version reports the release that
           # was actually built instead of a literal that goes stale.
           VERSION="${GITHUB_REF_NAME#v}"
           LDFLAGS="-s -w -X github.com/Nomadcxx/sysc-walls/internal/version.Version=$VERSION"
-          go build -buildvcs=false -ldflags "$LDFLAGS" -o dist/sysc-walls-daemon ./cmd/daemon
-          go build -buildvcs=false -ldflags "$LDFLAGS" -o dist/sysc-walls-display ./cmd/display
-          go build -buildvcs=false -ldflags "$LDFLAGS" -o dist/sysc-walls-client ./cmd/client
+          go build -buildvcs=true -ldflags "$LDFLAGS" -o dist/sysc-walls-daemon ./cmd/daemon
+          go build -buildvcs=true -ldflags "$LDFLAGS" -o dist/sysc-walls-display ./cmd/display
+          go build -buildvcs=true -ldflags "$LDFLAGS" -o dist/sysc-walls-client ./cmd/client
+          for binary in dist/sysc-walls-*; do
+            info="$(go version -m "$binary")"
+            grep -q "vcs.revision=${GITHUB_SHA}$" <<< "$info"
+            grep -q "vcs.modified=false$" <<< "$info"
+          done
+          for binary in dist/sysc-walls-daemon dist/sysc-walls-display; do
+            test "$("$binary" -version | cut -d ' ' -f 2)" = "$VERSION"
+          done
 
       - name: Generate checksums
         run: |

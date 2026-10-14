@@ -49,6 +49,7 @@ desktop.ini
 $RECYCLE.BIN/
 
 # Compiled binaries
+/dist/
 /client
 /daemon
 /display

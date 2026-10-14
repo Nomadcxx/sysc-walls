@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -430,21 +431,26 @@ func (d *Daemon) LaunchScreensaver() {
 		log.Printf("Launching screensaver: %s %v", terminal, args)
 	}
 
-	// Detect compositor
-	comp, err := compositor.DetectCompositor()
-	if err != nil {
-		// Fallback: launch single instance without multi-monitor support
-		if d.debug {
-			log.Printf("Compositor detection failed: %v, launching single instance", err)
+	// Detect the compositor, or reuse the one from an earlier launch. The same
+	// instance is what makes per-compositor state survive across screensaver
+	// launches: Hyprland's fullscreen rule can only be added once, because
+	// there is no way to remove it again (#38).
+	comp := d.getCompositor()
+	if comp == nil {
+		detected, err := compositor.DetectCompositor()
+		if err != nil {
+			// Fallback: launch single instance without multi-monitor support
+			if d.debug {
+				log.Printf("Compositor detection failed: %v, launching single instance", err)
+			}
+			if err := d.systemD.LaunchScreensaver(terminal, args, "default"); err != nil {
+				log.Printf("Failed to launch screensaver: %v", err)
+			}
+			return
 		}
-		if err := d.systemD.LaunchScreensaver(terminal, args, "default"); err != nil {
-			log.Printf("Failed to launch screensaver: %v", err)
-		}
-		return
+		comp = detected
+		d.setCompositor(comp)
 	}
-
-	// Store compositor for cleanup later
-	d.setCompositor(comp)
 
 	if d.debug {
 		log.Printf("Detected compositor: %s", comp.Name())
@@ -508,6 +514,17 @@ func (d *Daemon) LaunchScreensaver() {
 
 		// Focus this output
 		if err := comp.FocusOutput(output.Name); err != nil {
+			if errors.Is(err, compositor.ErrNoFocusControl) {
+				// Nothing was launched yet, because focus cannot be
+				// moved and the first output is where it failed. Put a
+				// single instance on screen rather than looping past
+				// every output and leaving the screens bare.
+				log.Printf("%s cannot move focus between outputs, launching single instance: %v", comp.Name(), err)
+				if err := d.systemD.LaunchScreensaver(terminal, args, "default"); err != nil {
+					log.Printf("Failed to launch screensaver: %v", err)
+				}
+				return
+			}
 			log.Printf("Failed to focus output %s: %v", output.Name, err)
 			continue
 		}

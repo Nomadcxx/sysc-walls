@@ -12,7 +12,7 @@
 
 ---
 
-Watches for idle activity on Wayland (or X11), then displays animations from [sysc-Go](https://github.com/Nomadcxx/sysc-Go) when you step away. Runs as a systemd service and supports multi-monitor setups across Niri, Hyprland, Sway, and other Wayland compositors.
+Watches for idle activity on Wayland (or X11), then displays animations from [sysc-Go](https://github.com/Nomadcxx/sysc-Go) when you step away. Runs as a systemd service and supports multi-monitor setups across Niri, Hyprland and Sway, and single-instance coverage on labwc and other Wayland compositors.
 
 ## Install
 
@@ -184,7 +184,7 @@ Three components:
 
 ### 1. Daemon ([cmd/daemon/](cmd/daemon/))
 
-Systemd service that monitors idle time via Wayland's `ext-idle-notify-v1` protocol (X11 via xprintidle). Detects compositor (Niri/Hyprland/Sway), launches screensaver on all monitors, kills on activity. See [pkg/idle/](pkg/idle/) for CGO bindings and [internal/compositor/](internal/compositor/) for multi-monitor logic.
+Systemd service that monitors idle time via Wayland's `ext-idle-notify-v1` protocol (X11 via xprintidle). Detects compositor (Niri/Hyprland/Sway/labwc), launches screensaver on all monitors, kills on activity. See [pkg/idle/](pkg/idle/) for CGO bindings and [internal/compositor/](internal/compositor/) for multi-monitor logic.
 
 ### 2. Display ([cmd/display/](cmd/display/))
 

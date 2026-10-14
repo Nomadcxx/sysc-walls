@@ -284,7 +284,7 @@ journalctl --user -u sysc-walls.service -f
 ```
 
 Look for:
-- "Detected compositor: niri/hyprland/sway" - confirms Wayland detection
+- "Detected compositor: niri/hyprland/sway/labwc" - confirms Wayland detection
 - "System idle, launching screensaver" - confirms idle detection working
 - "Launched screensaver on [output]" - confirms launch success
 
@@ -473,6 +473,18 @@ Add to `~/.config/hypr/hyprland.conf`:
 
 ```conf
 exec-once = systemctl --user import-environment WAYLAND_DISPLAY
+```
+
+### labwc
+
+labwc support requires `wlr-randr` (it reads outputs through wlr-output-management).
+labwc has no IPC, so the daemon cannot move focus between outputs and launches a
+single fullscreen instance on whichever output already has focus.
+
+Make sure the daemon sees the session environment:
+
+```bash
+systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
 ```
 
 ### Sway

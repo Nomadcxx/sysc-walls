@@ -241,14 +241,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *model) initTasks() {
 	if m.uninstallMode {
 		m.tasks = []installTask{
-			{name: "Check privileges", description: "Checking root access", execute: checkPrivileges, status: statusPending},
+			{name: "Check privileges", description: "Checking sudo access and target user", execute: checkPrivileges, status: statusPending},
+			{name: "Disable legacy system service", description: "Stopping a legacy root service if present", execute: disableLegacySystemService, status: statusPending},
 			{name: "Stop daemon", description: "Stopping sysc-walls daemon if running", execute: stopDaemon, status: statusPending},
 			{name: "Remove binaries", description: "Removing /usr/local/bin/sysc-walls-*", execute: removeBinaries, status: statusPending},
 			{name: "Remove systemd service", description: "Removing systemd service", execute: removeSystemdService, status: statusPending},
 		}
 	} else {
 		m.tasks = []installTask{
-			{name: "Check privileges", description: "Checking root access", execute: checkPrivileges, status: statusPending},
+			{name: "Check privileges", description: "Checking sudo access and target user", execute: checkPrivileges, status: statusPending},
+			{name: "Disable legacy system service", description: "Stopping a legacy root service if present", execute: disableLegacySystemService, status: statusPending},
 			{name: "Stop existing daemon", description: "Stopping existing sysc-walls daemon if running", execute: stopDaemon, status: statusPending, optional: true},
 			{name: "Build binaries", description: "Building sysc-walls components", execute: buildBinaries, status: statusPending},
 			{name: "Install binaries", description: "Installing to /usr/local/bin", execute: installBinaries, status: statusPending},
@@ -544,7 +546,39 @@ func executeTask(index int, m *model) tea.Cmd {
 
 func checkPrivileges(m *model) error {
 	if os.Geteuid() != 0 {
-		return fmt.Errorf("installer must be run with sudo or as root")
+		return fmt.Errorf("run the installer with sudo from the desktop account you want to install for")
+	}
+	if os.Getenv("SUDO_USER") == "" {
+		return fmt.Errorf("a root login has no target desktop user; run the installer with sudo from that user's account")
+	}
+	_, targetUID, _, err := resolveUserHome()
+	if err != nil {
+		return fmt.Errorf("failed to resolve the target desktop user: %v", err)
+	}
+	if targetUID == 0 {
+		return fmt.Errorf("sysc-walls must be installed for a desktop user, not root")
+	}
+	return nil
+}
+
+func disableLegacySystemService(m *model) error {
+	query := exec.Command("systemctl", "--system", "show", "--property=LoadState", "--value", "sysc-walls.service")
+	output, err := query.CombinedOutput()
+	loadState := strings.TrimSpace(string(output))
+	if loadState == "not-found" {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to inspect the system-scoped sysc-walls service: %v\n%s", err, output)
+	}
+	if loadState == "" {
+		return fmt.Errorf("systemd returned an empty load state for the system-scoped sysc-walls service")
+	}
+
+	cmd := exec.Command("systemctl", "--system", "disable", "--now", "sysc-walls.service")
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to stop and disable the legacy system-scoped sysc-walls service: %v\n%s\nRun manually: sudo systemctl --system disable --now sysc-walls.service", err, output)
 	}
 	return nil
 }
@@ -1107,12 +1141,13 @@ func removeBinaries(m *model) error {
 }
 
 func removeSystemdService(m *model) error {
-	// Get the actual user's home directory (not root when using sudo)
-	homeDir := os.Getenv("HOME")
-	sudoUser := os.Getenv("SUDO_USER")
-	if sudoUser != "" {
-		homeDir = "/home/" + sudoUser
+	// Resolve the same target home used by the installer instead of guessing
+	// that every sudo user's home is under /home.
+	homeDir, _, _, err := resolveUserHome()
+	if err != nil {
+		return err
 	}
+	sudoUser := os.Getenv("SUDO_USER")
 
 	// Get actual user UID for XDG_RUNTIME_DIR
 	actualUID := os.Getuid()
@@ -1147,7 +1182,7 @@ func removeSystemdService(m *model) error {
 
 	// Remove the user service file
 	servicePath := filepath.Join(homeDir, ".config", "systemd", "user", "sysc-walls.service")
-	err := os.Remove(servicePath)
+	err = os.Remove(servicePath)
 	if err != nil && !os.IsNotExist(err) {
 		// Service file doesn't exist or we can't remove it - not critical, just log it
 		fmt.Printf("Note: Could not remove service file at %s: %v\n", servicePath, err)

@@ -12,7 +12,7 @@
 
 ---
 
-Watches for idle activity on Wayland (or X11), then displays animations from [sysc-Go](https://github.com/Nomadcxx/sysc-Go) when you step away. Runs as a systemd service and supports multi-monitor setups across Niri, Hyprland and Sway, and single-instance coverage on labwc and other Wayland compositors.
+Watches for idle activity on Wayland (or X11), then displays animations from [sysc-Go](https://github.com/Nomadcxx/sysc-Go) when you step away. Runs as a systemd user service and supports multi-monitor setups across Niri, Hyprland and Sway, and single-instance coverage on labwc and other Wayland compositors.
 
 ## Install
 
@@ -32,7 +32,7 @@ Or **manual install:**
 ```bash
 git clone https://github.com/Nomadcxx/sysc-walls.git
 cd sysc-walls
-go run cmd/installer/main.go
+sudo go run cmd/installer/main.go
 ```
 
 The installer automatically:
@@ -40,6 +40,7 @@ The installer automatically:
 - Builds all binaries (daemon, display, client)
 - Installs to `/usr/local/bin`
 - Sets up the systemd user service
+- Stops and disables the legacy root system service if present
 - Imports `WAYLAND_DISPLAY` for compositor detection
 - Backs up and updates your config with current defaults
 - Copies bundled ASCII art to `~/.config/sysc-walls/ascii/`
@@ -54,6 +55,12 @@ Then enable the service:
 ```bash
 systemctl --user enable sysc-walls.service
 systemctl --user start sysc-walls.service
+```
+
+Older installs enabled a system-scoped service that ran as root. The standalone installer stops and disables it. If you upgraded through AUR from an older install, run this once if the old system service is still enabled:
+
+```bash
+sudo systemctl --system disable --now sysc-walls.service
 ```
 
 The default idle timeout is 5 minutes.
@@ -149,7 +156,7 @@ For detailed configuration options and troubleshooting, see [TROUBLESHOOTING.md]
 ```bash
 git clone https://github.com/Nomadcxx/sysc-walls.git
 cd sysc-walls
-go run cmd/installer/main.go
+sudo go run cmd/installer/main.go
 ```
 
 **Manual build:**

@@ -4,21 +4,23 @@ package config
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	syscGo "github.com/Nomadcxx/sysc-Go/animations"
-
+	wallAnimations "github.com/Nomadcxx/sysc-walls/internal/animations"
 	"github.com/Nomadcxx/sysc-walls/internal/version"
 )
 
 // Available animation effects - auto-generated from sysc-Go registry
-var AvailableEffects = syscGo.GetEffectNames()
+var AvailableEffects = wallAnimations.AvailableEffectNames()
 
 // Available color themes - auto-generated from sysc-Go registry
 var AvailableThemes = syscGo.GetThemeNames()
@@ -59,6 +61,7 @@ type Config struct {
 	debug              bool
 	animationEffect    string
 	animationTheme     string
+	followShellTheme   bool
 	animationFile      string // Custom artwork file path for text-based effects
 	animationDatetime  bool   // Show date/time display in screensaver
 	datetimePosition   string // Position of datetime: "top", "center", "bottom"
@@ -77,6 +80,7 @@ func NewConfig() *Config {
 		debug:              false,
 		animationEffect:    "matrix-art",
 		animationTheme:     "rama",
+		followShellTheme:   true,
 		animationDatetime:  false,
 		datetimePosition:   "bottom", // datetime position: top, center, or bottom
 		datetimeInterval:   1 * time.Second,
@@ -203,6 +207,12 @@ func (c *Config) parseConfigLine(key, value string) {
 		} else {
 			fmt.Fprintf(os.Stderr, "Warning: Invalid animation theme '%s' in config file. Using default.\n", value)
 			fmt.Fprintf(os.Stderr, "Available themes: %s\n", strings.Join(AvailableThemes, ", "))
+		}
+	case "animation.follow_shell":
+		if boolVal, err := strconv.ParseBool(value); err == nil {
+			c.followShellTheme = boolVal
+		} else {
+			fmt.Fprintf(os.Stderr, "Warning: Invalid follow_shell value '%s'. Using current setting.\n", value)
 		}
 	case "animation.file":
 		// Expand environment variables and home directory
@@ -364,6 +374,8 @@ func (c *Config) createDefaultConfig(configPath string) error {
 		"# Available effects: " + strings.Join(AvailableEffects, ", "),
 		fmt.Sprintf("theme = %s", c.animationTheme),
 		"# Available themes: " + strings.Join(AvailableThemes, ", "),
+		fmt.Sprintf("follow_shell = %t", c.followShellTheme),
+		"# Follow sysc-shell's named theme; set false to use the theme above",
 		fmt.Sprintf("datetime = %t", c.animationDatetime),
 		fmt.Sprintf("cycle = %t", c.cycleAnimations),
 		fmt.Sprintf("cycle_interval = %s", formatDuration(c.cycleInterval)),
@@ -439,6 +451,8 @@ func (c *Config) SaveToFile(configPath string) error {
 		"# Available effects: " + strings.Join(AvailableEffects, ", "),
 		fmt.Sprintf("theme = %s", c.animationTheme),
 		"# Available themes: " + strings.Join(AvailableThemes, ", "),
+		fmt.Sprintf("follow_shell = %t", c.followShellTheme),
+		"# Follow sysc-shell's named theme; set false to use the theme above",
 		fmt.Sprintf("datetime = %t", c.animationDatetime),
 		fmt.Sprintf("cycle = %t", c.cycleAnimations),
 		fmt.Sprintf("cycle_interval = %s", formatDuration(c.cycleInterval)),
@@ -510,9 +524,48 @@ func (c *Config) SetAnimationEffect(effect string) error {
 	return nil
 }
 
-// GetAnimationTheme returns the default animation theme
+// GetAnimationTheme resolves sysc-shell's current named theme when following is enabled.
 func (c *Config) GetAnimationTheme() string {
+	if c.followShellTheme {
+		if name, err := readShellThemeSelection(); err == nil && IsValidTheme(name) {
+			return name
+		}
+	}
 	return c.animationTheme
+}
+
+// SetFollowShellTheme enables or disables following the current sysc-shell theme.
+func (c *Config) SetFollowShellTheme(follow bool) {
+	c.followShellTheme = follow
+}
+
+func readShellThemeSelection() (string, error) {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(configDir, "sysc-shell", "shell-theme")
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() || info.Size() > 64 {
+		return "", fmt.Errorf("shell theme selection is not a small regular file")
+	}
+	data, err := io.ReadAll(io.LimitReader(file, 65))
+	if err != nil {
+		return "", err
+	}
+	if len(data) > 64 {
+		return "", fmt.Errorf("shell theme selection exceeds 64 bytes")
+	}
+	return strings.TrimSpace(string(data)), nil
 }
 
 // GetAnimationFile returns the custom animation file path
@@ -541,6 +594,7 @@ func (c *Config) SetAnimationTheme(theme string) error {
 		return fmt.Errorf("invalid animation theme: %s\nAvailable themes: %s", theme, strings.Join(AvailableThemes, ", "))
 	}
 	c.animationTheme = theme
+	c.followShellTheme = false
 	return nil
 }
 

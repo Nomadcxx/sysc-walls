@@ -88,7 +88,8 @@ func buildReexecHelper(t *testing.T) string {
 	// the SysProcAttr without Setsid. Everything under test — the env marker,
 	// the launcher/child split, and which process writes the PID file — is
 	// independent of session detachment.
-	build = exec.Command("go", "build", "-tags", "nosetsid", "-o", bin, ".")
+	// The helper lives in t.TempDir(), outside the checkout's VCS root.
+	build = exec.Command("go", "build", "-buildvcs=false", "-tags", "nosetsid", "-o", bin, ".")
 	build.Dir = dir
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("building helper: %v\n%s", err, out)

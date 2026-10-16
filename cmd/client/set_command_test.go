@@ -25,7 +25,8 @@ func TestMain(m *testing.M) {
 	}
 	clientBin = filepath.Join(dir, "client")
 
-	build := exec.Command("go", "build", "-o", clientBin, ".")
+	// These tests exercise CLI behavior, not checkout VCS metadata.
+	build := exec.Command("go", "build", "-buildvcs=false", "-o", clientBin, ".")
 	if out, err := build.CombinedOutput(); err != nil {
 		panic("building client: " + err.Error() + "\n" + string(out))
 	}
@@ -45,7 +46,7 @@ func runClient(t *testing.T, home string, args ...string) (stdout string, code i
 	}
 
 	cmd := exec.Command(clientBin, args...)
-	cmd.Env = append(os.Environ(), "HOME="+home)
+	cmd.Env = append(os.Environ(), "HOME="+home, "XDG_CONFIG_HOME="+filepath.Join(home, ".config"))
 	var out strings.Builder
 	cmd.Stdout = &out
 	cmd.Stderr = &out
@@ -71,6 +72,21 @@ func readEffect(t *testing.T, home string) string {
 			if i := strings.Index(line, "="); i >= 0 {
 				return strings.TrimSpace(line[i+1:])
 			}
+		}
+	}
+	return ""
+}
+
+func readConfigValue(t *testing.T, home, key string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(home, ".config", "sysc-walls", "daemon.conf"))
+	if err != nil {
+		t.Fatalf("reading config: %v", err)
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		name, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if ok && strings.TrimSpace(name) == key {
+			return strings.TrimSpace(value)
 		}
 	}
 	return ""
@@ -136,6 +152,23 @@ func TestSetAcceptsValidValues(t *testing.T) {
 	out, code = runClient(t, home, "set", "timeout", "7m")
 	if code != 0 {
 		t.Fatalf("set timeout 7m failed (code %d): %s", code, out)
+	}
+}
+
+func TestSetThemeDisablesShellFollowingAndCanReenable(t *testing.T) {
+	home := t.TempDir()
+	if out, code := runClient(t, home, "set", "theme", "nord"); code != 0 {
+		t.Fatalf("set theme failed (code %d): %s", code, out)
+	}
+	if got := readConfigValue(t, home, "follow_shell"); got != "false" {
+		t.Fatalf("follow_shell after manual theme = %q, want false", got)
+	}
+	out, code := runClient(t, home, "set", "follow-shell", "true")
+	if code != 0 {
+		t.Fatalf("re-enable shell theme following failed (code %d): %s", code, out)
+	}
+	if got := readConfigValue(t, home, "follow_shell"); got != "true" {
+		t.Fatalf("follow_shell after re-enable = %q, want true", got)
 	}
 }
 

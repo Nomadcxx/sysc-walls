@@ -4,16 +4,25 @@ on:
   push:
     tags:
       - "v*"
-  # Dry run: builds the binaries, skips release creation
+  # Dry run builds binaries and packages, then skips release creation.
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
-
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            goarch: amd64
+            nfpmarch: amd64
+          - runner: ubuntu-24.04-arm
+            goarch: arm64
+            nfpmarch: arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,19 +34,35 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install wayland dev headers
-        run: sudo apt-get update && sudo apt-get install -y libwayland-dev
+      - name: Install Wayland build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libwayland-dev pkg-config
 
-      - name: Build linux binaries
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.48.0
+
+      - name: Resolve package version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="0.0.0"
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build binaries and packages
         env:
+          ARCH: ${{ matrix.nfpmarch }}
+          CGO_ENABLED: "1"
+          GOARCH: ${{ matrix.goarch }}
           GOOS: linux
-          GOARCH: amd64
+          VERSION: ${{ steps.version.outputs.value }}
+        shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
-          # Stamp the tag into the binary so -version reports the release that
-          # was actually built instead of a literal that goes stale.
-          VERSION="${GITHUB_REF_NAME#v}"
           LDFLAGS="-s -w -X github.com/Nomadcxx/sysc-walls/internal/version.Version=$VERSION"
           go build -buildvcs=true -ldflags "$LDFLAGS" -o dist/sysc-walls-daemon ./cmd/daemon
           go build -buildvcs=true -ldflags "$LDFLAGS" -o dist/sysc-walls-display ./cmd/display
@@ -50,21 +75,45 @@ jobs:
           for binary in dist/sysc-walls-daemon dist/sysc-walls-display; do
             test "$("$binary" -version | cut -d ' ' -f 2)" = "$VERSION"
           done
+          sed 's|/usr/local/bin|/usr/bin|g' systemd/sysc-walls-user.service > dist/sysc-walls.service
+          nfpm package --config nfpm.yaml --packager deb --target dist/
+          nfpm package --config nfpm.yaml --packager rpm --target dist/
 
-      - name: Generate checksums
-        run: |
-          cd dist
-          sha256sum * > SHA256SUMS
-          cat SHA256SUMS
+      - name: Upload Debian and RPM packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: sysc-walls-packages-${{ matrix.goarch }}
+          path: |
+            dist/*.deb
+            dist/*.rpm
+          if-no-files-found: error
 
-      - name: Upload artifacts
+      - name: Upload amd64 binaries
+        if: matrix.goarch == 'amd64'
         uses: actions/upload-artifact@v4
         with:
           name: sysc-walls-binaries
-          path: dist/
+          path: |
+            dist/sysc-walls-daemon
+            dist/sysc-walls-display
+            dist/sysc-walls-client
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist
+
+      - name: Generate checksums
+        run: cd dist && sha256sum * > SHA256SUMS
 
       - name: Create release
-        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

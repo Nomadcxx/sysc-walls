@@ -8,7 +8,7 @@ package version
 // used to be declared separately and drifted apart, so a user on an
 // intermediate release was told they met the requirement and then the daemon
 // refused to start.
-const MinSyscGoVersion = "1.0.3"
+const MinSyscGoVersion = "1.0.7"
 
 // SyscGoVersion is the minimum required sysc-Go version, in the prefixed form
 // used by the sysc-Go release tags.
@@ -18,7 +18,7 @@ const SyscGoVersion = "v" + MinSyscGoVersion
 //
 // It is a var rather than a const so release builds can stamp it with
 // -ldflags "-X github.com/Nomadcxx/sysc-walls/internal/version.Version=...".
-var Version = "1.1.1"
+var Version = "1.2.0"
 
 // Name is the project name
 const Name = "sysc-walls"

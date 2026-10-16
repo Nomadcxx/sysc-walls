@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	syscGo "github.com/Nomadcxx/sysc-Go/animations"
 	"github.com/Nomadcxx/sysc-walls/internal/compositor"
 	"github.com/Nomadcxx/sysc-walls/internal/config"
 	"github.com/Nomadcxx/sysc-walls/internal/systemd"
@@ -766,24 +767,7 @@ func showDemoMode(daemon *Daemon, debugMode bool, sigChan chan os.Signal) {
 
 	daemon.debug = debugMode
 
-	// Define demo effect order (text-based effects first, then non-text effects)
-	// Note: decrypt, pour, and print are not yet implemented in sysc-Go
-	demoEffects := []string{
-		// Text-based effects
-		"fire-text",
-		"matrix-art",
-		"beam-text",
-		"rain-art",
-		"ring-text",
-		"blackhole",
-		// Non-text effects
-		"matrix",
-		"rain",
-		"fire",
-		"fireworks",
-		"beams",
-		"aquarium",
-	}
+	demoEffects := demoEffectNames()
 
 	effectDuration := 15 * time.Second
 	theme := daemon.config.GetAnimationTheme()
@@ -880,6 +864,18 @@ func showDemoMode(daemon *Daemon, debugMode bool, sigChan chan os.Signal) {
 	fmt.Println(colorAccent.Render("✓ Demo complete"))
 	fmt.Println()
 	daemon.Shutdown()
+}
+
+func demoEffectNames() []string {
+	var textEffects, standaloneEffects []string
+	for _, effect := range config.AvailableEffects {
+		if syscGo.IsTextBasedEffect(effect) {
+			textEffects = append(textEffects, effect)
+		} else {
+			standaloneEffects = append(standaloneEffects, effect)
+		}
+	}
+	return append(textEffects, standaloneEffects...)
 }
 
 // showUsage displays usage information

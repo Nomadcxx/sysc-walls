@@ -18,7 +18,7 @@ const SyscGoVersion = "v" + MinSyscGoVersion
 //
 // It is a var rather than a const so release builds can stamp it with
 // -ldflags "-X github.com/Nomadcxx/sysc-walls/internal/version.Version=...".
-var Version = "1.1.1"
+var Version = "1.2.0"
 
 // Name is the project name
 const Name = "sysc-walls"

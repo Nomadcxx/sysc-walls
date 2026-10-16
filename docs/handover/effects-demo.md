@@ -17,13 +17,13 @@ Standalone effects:
 - `sysc-logo`
 - `cross-logo`
 - `logo-morph`
-- `pour`
-- `print`
 
 Effects that use ASCII input:
 
 - `ak-47-text`
 - `decrypt`
+- `pour`
+- `print`
 
 The existing README already shows `fire`, `matrix`, `rain`, `fireworks`, `beams`, `aquarium`, `fire-text`, `matrix-art`, `rain-art`, `beam-text`, `ring-text`, and `blackhole`. Re-encode these GIFs to WebP; also convert `showcase_tui.gif` because it is embedded in the README. Name the text previews `matrix-art.webp` and `rain-art.webp`, matching their effect IDs.
 
@@ -40,7 +40,7 @@ The existing README already shows `fire`, `matrix`, `rain`, `fireworks`, `beams`
 ## Handoff sequence
 
 1. Convert the existing showcase GIFs to `assets/<name>.webp` and verify them in a browser. Record each effect listed above in a real terminal and encode the screen capture as `assets/<effect-id>.webp`.
-2. Inspect every recording and WebP for clipping, readable motion, visible credits, animation, and file size. Follow `sysc-Go/demos/README.md` for the screen-capture and encoding steps. Update sysc-Go README links to WebP and remove superseded GIFs after confirming no references remain.
+2. Inspect every recording and WebP for clipping, readable motion, visible credits, animation, and file size. Follow the [sysc-Go demo guide](https://github.com/Nomadcxx/sysc-Go/blob/master/demos/README.md) for the screen-capture and encoding steps. Update sysc-Go README links to WebP and remove superseded GIFs after confirming no references remain.
 3. Open and merge the sysc-Go PR. Then update the sysc-walls Effects Demo links to `.webp`, following its existing `raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/...` links.
 
 Do not change effect implementations or add effect IDs as part of the demo work.

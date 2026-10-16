@@ -120,7 +120,7 @@ The default idle timeout is 5 minutes.
 
 ## Effects Demo
 
-sysc-walls uses [sysc-Go](https://github.com/Nomadcxx/sysc-Go) for all animations. Try demo mode to cycle through all effects:
+sysc-walls uses [sysc-Go](https://github.com/Nomadcxx/sysc-Go) for its animations. The images below show selected effects. Run demo mode to cycle through the full catalog:
 
 ```bash
 sysc-walls-daemon -demo
@@ -197,6 +197,8 @@ fullscreen = true     # Launch fullscreen
 ```
 
 **Available effects:**
+
+These names match the enabled effect IDs from sysc-Go. Text effects use the ASCII art file configured with `file`.
 
 Text effects: `matrix-art`, `fire-text`, `rain-art`, `beam-text`, `decrypt`, `pour`, `print`, `blackhole`, `ring-text`, `ak-47-text`.
 

@@ -28,6 +28,59 @@ yay -S sysc-walls
 paru -S sysc-walls
 ```
 
+### Debian and Fedora
+
+Download the package for your architecture from the [latest release](https://github.com/Nomadcxx/sysc-walls/releases/latest), then install it with your package manager:
+
+```bash
+# Debian or Ubuntu
+sudo apt install ./sysc-walls_*_amd64.deb
+
+# Fedora
+sudo dnf install ./sysc-walls-*.x86_64.rpm
+```
+
+Use the `arm64` or `aarch64` package on ARM systems. On X11, install `xprintidle` as well (`sudo apt install xprintidle` or `sudo dnf install xprintidle`). Then enable the user service:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now sysc-walls.service
+```
+
+The service starts with `graphical-session.target`.
+
+### Nix and NixOS
+
+Install the package and Kitty into your user profile:
+
+```bash
+nix profile install nixpkgs#kitty github:Nomadcxx/sysc-walls
+# On X11, add xprintidle as well
+nix profile install nixpkgs#xprintidle
+```
+
+The standalone package provides binaries and artwork. For a managed user service on NixOS, add the flake input and module to your system flake, then enable the service:
+
+```nix
+{
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.sysc-walls.url = "github:Nomadcxx/sysc-walls";
+
+  outputs = inputs@{ nixpkgs, ... }: {
+    nixosConfigurations.mymachine = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        ./configuration.nix
+        inputs.sysc-walls.nixosModules.default
+        { services.sysc-walls.enable = true; }
+      ];
+    };
+  };
+}
+```
+
+Rebuild with `sudo nixos-rebuild switch --flake .#<host>`. The module starts the daemon at `graphical-session.target`; your desktop or compositor session must activate that target. The flake supports `x86_64-linux` and `aarch64-linux`.
+
 Or **manual install:**
 ```bash
 git clone https://github.com/Nomadcxx/sysc-walls.git
@@ -111,7 +164,7 @@ Text effects require ASCII art via the `file` config option.
 
 ### Available Themes
 
-`rama`, `nord`, `dracula`, `gruvbox`, `tokyo-night`, `catppuccin`, `material`, `solarized`, `monochrome`, `eldritch`, `dark`, `trainsishardjob`
+`dracula`, `catppuccin`, `catppuccin-mocha`, `nord`, `tokyo-night` (`tokyonight`), `gruvbox`, `material`, `solarized`, `monochrome`, `transishardjob`, `rama`, `eldritch`, `dark`, `ayu`, `amber`, `blue`, `purple`, `green`, `orange`, `rose-pine`, `kanagawa`, `noctalia`, `eldritch-abyss`, `void`, `red`, `cyan`, `coral`, `pink`
 
 For custom ASCII art, use [syscgo-tui](https://github.com/Nomadcxx/sysc-Go) to create and export text files. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for setup.
 
@@ -127,6 +180,7 @@ min_duration = 30s    # Minimum time screensaver runs
 [animation]
 effect = matrix-art   # Which animation to show
 theme = rama          # Color scheme
+follow_shell = true   # Follow sysc-shell's current named theme
 datetime = false      # Enable datetime display
 cycle = false         # Rotate through effects
 
@@ -143,10 +197,15 @@ fullscreen = true     # Launch fullscreen
 ```
 
 **Available effects:**
-`matrix`, `matrix-art`, `fire`, `fire-text`, `fireworks`, `rain`, `rain-art`, `beams`, `beam-text`, `decrypt`, `pour`, `aquarium`, `print`, `ring-text`, `blackhole`
+
+Text effects: `matrix-art`, `fire-text`, `rain-art`, `beam-text`, `decrypt`, `pour`, `print`, `blackhole`, `ring-text`, `ak-47-text`.
+
+Standalone effects: `matrix`, `fire`, `fireworks`, `rain`, `beams`, `aquarium`, `skull`, `sonar`, `cracktro`, `sysc-logo`, `cross-logo`, `logo-morph`, `ak-47`, `great-wave`, `wasteland`.
 
 **Available themes:**
-`rama`, `nord`, `dracula`, `gruvbox`, `tokyo-night`, `catppuccin`, `material`, `solarized`, `monochrome`, `eldritch`, `dark`, `trainsishardjob`
+`dracula`, `catppuccin`, `catppuccin-mocha`, `nord`, `tokyo-night` (`tokyonight`), `gruvbox`, `material`, `solarized`, `monochrome`, `transishardjob`, `rama`, `eldritch`, `dark`, `ayu`, `amber`, `blue`, `purple`, `green`, `orange`, `rose-pine`, `kanagawa`, `noctalia`, `eldritch-abyss`, `void`, `red`, `cyan`, `coral`, `pink`
+
+sysc-walls reads `$XDG_CONFIG_HOME/sysc-shell/shell-theme` each time the screensaver starts. When `XDG_CONFIG_HOME` is unset, it reads `~/.config/sysc-shell/shell-theme`. A named theme change in sysc-shell applies at the next activation. If the file is missing or the theme is unsupported, sysc-walls uses `theme` from this file. Set `follow_shell = false` or run `sysc-walls set follow-shell false` to use an independent theme. Running `sysc-walls set theme <name>` disables following; run `sysc-walls set follow-shell true` to enable it again.
 
 For detailed configuration options and troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
@@ -201,7 +260,7 @@ Renders [sysc-Go](https://github.com/Nomadcxx/sysc-Go) animations in fullscreen 
 
 Optional CLI for testing. Not needed for normal operation.
 
-Config lives in `~/.config/sysc-walls/daemon.conf` (see [internal/config/](internal/config/)). Build uses [sysc-Go](https://github.com/Nomadcxx/sysc-Go) as a proper Go module dependency (v1.0.3+).
+Config lives in `~/.config/sysc-walls/daemon.conf` (see [internal/config/](internal/config/)). Build uses [sysc-Go](https://github.com/Nomadcxx/sysc-Go) as a Go module dependency (v1.0.7+).
 
 Datetime behavior:
 - Text-updatable effects (`fire-text`, `matrix-art`, `rain-art`, `beam-text`, `decrypt`, `pour`, `print`, `blackhole`, `ring-text`) render the clock as live text inside the effect.

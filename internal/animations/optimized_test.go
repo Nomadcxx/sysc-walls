@@ -1,8 +1,77 @@
 package animations
 
 import (
+	"slices"
 	"testing"
+
+	syscGo "github.com/Nomadcxx/sysc-Go/animations"
 )
+
+func TestSyscGoRegistryEffectsCanBeConstructed(t *testing.T) {
+	newTerminalEffects := []string{
+		"skull", "sonar", "cracktro", "sysc-logo", "cross-logo", "logo-morph",
+		"ak-47", "ak-47-text", "great-wave", "wasteland",
+	}
+	effectNames := syscGo.GetEffectNames()
+	for _, effect := range newTerminalEffects {
+		if !slices.Contains(effectNames, effect) {
+			t.Fatalf("sysc-Go registry is missing sysc-terminal effect %q", effect)
+		}
+	}
+
+	for _, effect := range AvailableEffectNames() {
+		t.Run(effect, func(t *testing.T) {
+			var anim Animation
+			var err error
+			if syscGo.IsTextBasedEffect(effect) {
+				anim, err = CreateAnimationWithText(effect, 80, 24, "nord", "SYSC")
+			} else {
+				anim, err = CreateAnimation(effect, 80, 24, "nord")
+			}
+			if err != nil {
+				t.Fatalf("construct: %v", err)
+			}
+			anim.Update(0)
+			if frame := anim.Render(); frame == "" {
+				t.Fatal("rendered an empty frame")
+			}
+			anim.Resize(100, 30)
+			anim.Update(1)
+			if frame := anim.Render(); frame == "" {
+				t.Fatal("rendered an empty frame after resize")
+			}
+		})
+	}
+}
+
+func TestBrokenEffectsAreUnavailable(t *testing.T) {
+	for _, effect := range []string{"ak-47-rama", "justice-cross"} {
+		if _, err := CreateAnimation(effect, 80, 24, "nord"); err == nil {
+			t.Errorf("unfinished effect %q can be constructed", effect)
+		}
+	}
+}
+
+func TestAvailableEffectNamesMatchesRegistry(t *testing.T) {
+	want := make([]string, 0, len(syscGo.GetEffectNames()))
+	for _, effect := range syscGo.GetEffectNames() {
+		if effect == "ak-47-rama" || effect == "justice-cross" {
+			continue
+		}
+		want = append(want, effect)
+	}
+	if got := AvailableEffectNames(); !slices.Equal(got, want) {
+		t.Fatalf("AvailableEffectNames() = %v, want %v", got, want)
+	}
+}
+
+func TestSyscShellThemesUseSyscGoScreensaverPalettes(t *testing.T) {
+	for _, theme := range []string{"ayu", "blue", "eldritch-abyss"} {
+		if got, want := getThemePalette(theme), syscGo.GetScreensaverPalette(theme); !slices.Equal(got, want) {
+			t.Errorf("getThemePalette(%q) = %v, want sysc-Go palette %v", theme, got, want)
+		}
+	}
+}
 
 // TestCreateOptimizedAnimation tests animation creation
 func TestCreateOptimizedAnimation(t *testing.T) {

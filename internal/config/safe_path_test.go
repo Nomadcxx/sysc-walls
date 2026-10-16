@@ -102,6 +102,7 @@ func TestIsSafePathWithoutHome(t *testing.T) {
 func TestGetScreensaverCommandFilePathValidation(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 
 	// Fake display binary so findDisplayBinary() succeeds and the test
 	// exercises file path validation, not binary discovery.

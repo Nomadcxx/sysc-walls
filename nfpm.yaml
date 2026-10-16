@@ -1,0 +1,53 @@
+name: sysc-walls
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+release: "1"
+section: utils
+priority: optional
+maintainer: Nomadcxx <noovie@gmail.com>
+description: |
+  Terminal screensaver using sysc-Go animations.
+  Supports idle detection on Wayland and X11.
+vendor: Nomadcxx
+homepage: https://github.com/Nomadcxx/sysc-walls
+license: GPL-3.0-only
+
+contents:
+  - src: ./dist/sysc-walls-daemon
+    dst: /usr/bin/sysc-walls-daemon
+    file_info:
+      mode: 0755
+  - src: ./dist/sysc-walls-display
+    dst: /usr/bin/sysc-walls-display
+    file_info:
+      mode: 0755
+  - src: ./dist/sysc-walls-client
+    dst: /usr/bin/sysc-walls-client
+    file_info:
+      mode: 0755
+  - src: ./dist/sysc-walls.service
+    dst: /usr/lib/systemd/user/sysc-walls.service
+    file_info:
+      mode: 0644
+  - src: ./assets/ascii/
+    dst: /usr/share/sysc-walls/ascii/
+    type: tree
+  - src: ./README.md
+    dst: /usr/share/doc/sysc-walls/README.md
+    file_info:
+      mode: 0644
+  - src: ./LICENSE
+    dst: /usr/share/licenses/sysc-walls/LICENSE
+    file_info:
+      mode: 0644
+
+overrides:
+  deb:
+    depends:
+      - kitty
+      - libwayland-client0
+  rpm:
+    depends:
+      - kitty
+      - libwayland-client

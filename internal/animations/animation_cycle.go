@@ -105,24 +105,3 @@ func (c *AnimationCycler) SetRandomOrder(random bool) {
 func (c *AnimationCycler) GetRandomOrder() bool {
 	return c.randomOrder
 }
-
-// CreateDefaultCycle creates a cycle with the default animations
-// NOTE: This function is deprecated - use CreateOptimizedAnimation instead
-// Keeping for potential future use
-/*
-func CreateDefaultCycle() (*AnimationCycler, error) {
-	animations := []Animation{}
-	effects := []string{"matrix", "fire", "fireworks", "rain", "beams"}
-
-	for _, effect := range effects {
-		anim, err := CreateOptimizedAnimation(effect, 80, 24, "dracula")
-		if err != nil {
-			return nil, err
-		}
-		animations = append(animations, anim)
-	}
-
-	// Create a cycler with 2 minute intervals and random order
-	return NewAnimationCycler(animations, 2*time.Minute, true), nil
-}
-*/

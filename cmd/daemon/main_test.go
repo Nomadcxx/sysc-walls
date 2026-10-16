@@ -8,9 +8,40 @@ import (
 	"testing"
 	"time"
 
+	syscGo "github.com/Nomadcxx/sysc-Go/animations"
 	"github.com/Nomadcxx/sysc-walls/internal/config"
 	"github.com/Nomadcxx/sysc-walls/pkg/idle"
 )
+
+func TestDemoEffectNamesMatchesRegistryAndGroupsTextFirst(t *testing.T) {
+	names := demoEffectNames()
+	registry := config.AvailableEffects
+	if len(names) != len(registry) {
+		t.Fatalf("demo has %d effects, registry has %d", len(names), len(registry))
+	}
+
+	seen := make(map[string]bool, len(names))
+	standaloneSeen := false
+	for _, name := range names {
+		if seen[name] {
+			t.Errorf("demo contains duplicate effect %q", name)
+		}
+		seen[name] = true
+		if syscGo.IsTextBasedEffect(name) {
+			if standaloneSeen {
+				t.Errorf("text effect %q appears after standalone effects", name)
+			}
+		} else {
+			standaloneSeen = true
+		}
+	}
+
+	for _, name := range registry {
+		if !seen[name] {
+			t.Errorf("demo is missing registry effect %q", name)
+		}
+	}
+}
 
 // daemonLogPath returns where setupLogging writes for the given home dir.
 func daemonLogPath(home string) string {

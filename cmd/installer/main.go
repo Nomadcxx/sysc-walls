@@ -875,15 +875,19 @@ debug = false
 
 [animation]
 # effect: The animation/screensaver effect to display
-#         Text-based effects: matrix-art, fire-text, rain-art
-#         Non-text effects: matrix, fire, rain, aquarium, fireworks, beams
+#         Text effects use ASCII art; standalone effects render without text.
+#         Run sysc-walls-daemon without a command to see every effect.
 #         Default: matrix-art
 effect = matrix-art
 
 # theme: Color theme for the animation
-#        Available themes: dracula, rama, monokai, nord, gruvbox, tokyo-night, catppuccin
+#        Available themes: dracula, catppuccin, catppuccin-mocha, nord, tokyo-night, gruvbox, material, solarized,
+#                         monochrome, transishardjob, rama, eldritch, dark, ayu, amber, blue, purple, green,
+#                         orange, rose-pine, kanagawa, noctalia, eldritch-abyss, void, red, cyan, coral, pink
 #        Default: rama
 theme = rama
+# follow_shell: Follow sysc-shell's current named theme; false keeps theme above
+follow_shell = true
 
 # cycle: Automatically cycle through different effects
 #        Set to true to rotate effects periodically
@@ -897,7 +901,7 @@ cycle = false
 datetime = false
 
 # ASCII art files are stored in ~/.config/sysc-walls/ascii/
-# Text-based effects (matrix-art, rain-art, fire-text) will automatically use SYSC.txt
+# Text effects automatically use SYSC.txt unless a custom file is configured.
 
 [datetime]
 # position: Where to display the date/time overlay on screen

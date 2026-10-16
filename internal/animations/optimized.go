@@ -8,6 +8,21 @@ import (
 	syscGo "github.com/Nomadcxx/sysc-Go/animations"
 )
 
+// AvailableEffectNames mirrors sysc-Go's catalog except for the unfinished
+// animations that sysc-walls must keep disabled.
+func AvailableEffectNames() []string {
+	names := syscGo.GetEffectNames()
+	available := make([]string, 0, len(names))
+	for _, name := range names {
+		switch name {
+		case "ak-47-rama", "justice-cross":
+			continue
+		}
+		available = append(available, name)
+	}
+	return available
+}
+
 // CreateOptimizedAnimation creates an optimized animation using sysc-Go library directly
 func CreateOptimizedAnimation(effect string, width, height int, theme string) (Animation, error) {
 	return CreateOptimizedAnimationWithText(effect, width, height, theme, "")
@@ -83,9 +98,110 @@ func CreateOptimizedAnimationWithText(effect string, width, height int, theme st
 		return newOptimizedBlackhole(width, height, palette, text)
 	case "ring-text":
 		return newOptimizedRingText(width, height, palette, text)
+	case "ak-47-text":
+		animation, err := syscGo.NewAK47TextEffect(width, height, theme, text)
+		if err != nil {
+			return nil, err
+		}
+		return newOptimizedSyscGo(animation), nil
+	case "ak-47":
+		return newOptimizedSyscGo(syscGo.NewAK47Effect(width, height, theme)), nil
+	case "great-wave":
+		animation, err := syscGo.NewGreatWaveEffect(width, height, theme)
+		if err != nil {
+			return nil, err
+		}
+		return newOptimizedSyscGo(animation), nil
+	case "wasteland":
+		animation, err := syscGo.NewWastelandEffect(width, height, theme)
+		if err != nil {
+			return nil, err
+		}
+		return newOptimizedSyscGo(animation), nil
+	case "skull":
+		return newOptimizedSkull(width, height, palette, theme), nil
+	case "sonar":
+		return newOptimizedSyscGo(syscGo.NewSonarEffect(width, height, palette, theme)), nil
+	case "cracktro":
+		return newOptimizedSyscGo(syscGo.NewCracktroEffect(width, height, palette, theme)), nil
+	case "sysc-logo":
+		return newOptimizedLogoSpin(width, height, theme, "sysc"), nil
+	case "cross-logo":
+		return newOptimizedLogoSpin(width, height, theme, "cross"), nil
+	case "logo-morph":
+		return newOptimizedLogoSpin(width, height, theme, "sysc-cross"), nil
 	default:
 		return nil, fmt.Errorf("unknown animation effect: %s", effect)
 	}
+}
+
+type syscGoAnimation interface {
+	Update()
+	Render() string
+	Resize(width, height int)
+}
+
+// optimizedSyscGo adapts the library's Update() signature to Animation.
+type optimizedSyscGo struct {
+	effect syscGoAnimation
+}
+
+func newOptimizedSyscGo(effect syscGoAnimation) *optimizedSyscGo {
+	return &optimizedSyscGo{effect: effect}
+}
+
+func (a *optimizedSyscGo) Update(int) {
+	a.effect.Update()
+}
+
+func (a *optimizedSyscGo) Render() string {
+	return a.effect.Render()
+}
+
+func (a *optimizedSyscGo) Resize(width, height int) {
+	width, height = clampEffectSize(width, height)
+	a.effect.Resize(width, height)
+}
+
+// SkullAnimation has no Resize method, so rebuild it with the current size.
+type optimizedSkull struct {
+	effect        *syscGo.SkullAnimation
+	width, height int
+	palette       []string
+	theme         string
+}
+
+func newOptimizedSkull(width, height int, palette []string, theme string) *optimizedSkull {
+	return &optimizedSkull{
+		effect:  syscGo.NewSkullEffect(width, height, palette, theme),
+		width:   width,
+		height:  height,
+		palette: palette,
+		theme:   theme,
+	}
+}
+
+func (s *optimizedSkull) Update(int) {
+	s.effect.Update()
+}
+
+func (s *optimizedSkull) Render() string {
+	return s.effect.Render()
+}
+
+func (s *optimizedSkull) Resize(width, height int) {
+	s.width, s.height = clampEffectSize(width, height)
+	s.effect = syscGo.NewSkullEffect(s.width, s.height, s.palette, s.theme)
+}
+
+func newOptimizedLogoSpin(width, height int, theme, shape string) *optimizedSyscGo {
+	return newOptimizedSyscGo(syscGo.NewLogoSpinEffect(syscGo.LogoSpinConfig{
+		Width:   width,
+		Height:  height,
+		Shape:   shape,
+		Palette: syscGo.GetLogoPalette(theme),
+		Theme:   theme,
+	}))
 }
 
 // getThemePalette returns color palette for theme
@@ -107,6 +223,11 @@ func getThemePalette(theme string) []string {
 
 	if palette, ok := palettes[theme]; ok {
 		return palette
+	}
+	if syscGo.GetThemeMetadata(theme) != nil {
+		// ponytail: preserve existing detailed palettes and use sysc-Go's
+		// screensaver palette for newly added themes instead of copying its catalog.
+		return syscGo.GetScreensaverPalette(theme)
 	}
 	return palettes["rama"] // Default to rama
 }

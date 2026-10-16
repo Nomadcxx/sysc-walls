@@ -1,41 +1,37 @@
 package animations
 
-import "testing"
+import (
+	"testing"
 
-func TestTextEffectsImplementTextUpdatable(t *testing.T) {
-	effects := []string{
-		"fire-text",
-		"matrix-art",
-		"rain-art",
-		"beam-text",
-		"decrypt",
-		"pour",
-		"print",
-		"blackhole",
-		"ring-text",
-	}
+	syscGo "github.com/Nomadcxx/sysc-Go/animations"
+)
 
-	for _, effect := range effects {
+func TestTextEffectsRespectRuntimeUpdateSupport(t *testing.T) {
+	for _, effect := range syscGo.GetTextBasedEffects() {
 		t.Run(effect, func(t *testing.T) {
 			anim, err := CreateAnimationWithText(effect, 80, 24, "rama", "TEST")
 			if err != nil {
 				t.Fatalf("CreateAnimationWithText(%s) error: %v", effect, err)
 			}
 			tu, ok := anim.(TextUpdatable)
-			if !ok {
-				t.Fatalf("%s does not implement TextUpdatable", effect)
+			wantUpdatable := effect != "ak-47-text"
+			if ok != wantUpdatable {
+				t.Fatalf("%s TextUpdatable = %v, want %v", effect, ok, wantUpdatable)
 			}
 
-			// Should not panic
-			tu.SetText("HELLO WORLD")
+			if ok {
+				// Should not panic
+				tu.SetText("HELLO WORLD")
+			}
 		})
 	}
 }
 
 func TestNonTextEffectsDoNotImplementTextUpdatable(t *testing.T) {
-	effects := []string{"matrix", "fire", "fireworks", "rain", "beams", "aquarium"}
-
-	for _, effect := range effects {
+	for _, effect := range AvailableEffectNames() {
+		if syscGo.IsTextBasedEffect(effect) {
+			continue
+		}
 		t.Run(effect, func(t *testing.T) {
 			anim, err := CreateAnimation(effect, 80, 24, "rama")
 			if err != nil {

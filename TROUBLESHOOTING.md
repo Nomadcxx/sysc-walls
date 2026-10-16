@@ -32,7 +32,7 @@ The installer copies all ASCII art files from sysc-Go to this directory. Text-ba
 
 ## Creating Custom ASCII Art
 
-Text-based effects like `matrix-art`, `rain-art`, `fire-text`, `beam-text`, `ring-text`, and `blackhole` can display custom ASCII art. You can create your own art using the sysc-Go TUI tool or manually.
+Text effects such as `matrix-art`, `rain-art`, `fire-text`, `beam-text`, `ring-text`, `blackhole`, `decrypt`, `pour`, and `print` can display custom ASCII art. You can create your own art using the sysc-Go TUI tool or manually.
 
 ### Using the sysc-Go ASCII Creator TUI
 
@@ -206,36 +206,19 @@ fullscreen = true     # Launch in fullscreen mode
 
 ### Available Effects
 
-- `matrix` - Classic Matrix digital rain
-- `matrix-art` - Matrix rain that crystallizes into ASCII art
-- `fire` - Animated flames
-- `fire-text` - Fire effect with ASCII art overlay
-- `fireworks` - Firework explosions
-- `rain` - Falling rain droplets
-- `rain-art` - Rain crystallizing into ASCII art
-- `beams` - Horizontal light beams
-- `beam-text` - Text revealed by scanning beams
-- `decrypt` - Text decryption animation
-- `pour` - Liquid pouring effect
-- `aquarium` - Swimming ASCII fish
-- `print` - Typewriter text printing
-- `blackhole` - Text pulled into center vortex
-- `ring-text` - Text in circular rings
+Text effects, which use custom ASCII art:
+
+`matrix-art`, `fire-text`, `rain-art`, `beam-text`, `decrypt`, `pour`, `print`, `blackhole`, `ring-text`, `ak-47-text`
+
+Standalone effects, which render without text:
+
+`matrix`, `fire`, `fireworks`, `rain`, `beams`, `aquarium`, `skull`, `sonar`, `cracktro`, `sysc-logo`, `cross-logo`, `logo-morph`, `ak-47`, `great-wave`, `wasteland`
 
 ### Available Themes
 
-- `rama` - Space cadet color scheme (default)
-- `nord` - Cool nordic palette
-- `dracula` - Purple-dark theme
-- `gruvbox` - Retro warm colors
-- `tokyo-night` - Modern dark blue
-- `catppuccin` - Pastel mocha
-- `material` - Material Design colors
-- `solarized` - Precision colors for machines and people
-- `monochrome` - Black and white
-- `eldritch` - Cosmic purple/cyan
-- `dark` - Grayscale gradient
-- `trainsishardjob` - Custom rainbow palette
+`dracula`, `catppuccin`, `catppuccin-mocha`, `nord`, `tokyo-night` (`tokyonight`), `gruvbox`, `material`, `solarized`, `monochrome`, `transishardjob`, `rama`, `eldritch`, `dark`, `ayu`, `amber`, `blue`, `purple`, `green`, `orange`, `rose-pine`, `kanagawa`, `noctalia`, `eldritch-abyss`, `void`, `red`, `cyan`, `coral`, `pink`.
+
+sysc-walls reads sysc-shell's last committed named theme from `$XDG_CONFIG_HOME/sysc-shell/shell-theme` (or `~/.config/sysc-shell/shell-theme` when `XDG_CONFIG_HOME` is unset) each time the screensaver starts. Set `follow_shell = false` in `~/.config/sysc-walls/daemon.conf` or run `sysc-walls set follow-shell false` to use the configured `theme` instead. A manual `sysc-walls set theme <name>` disables following; `sysc-walls set follow-shell true` re-enables it.
 
 ## Key Files
 

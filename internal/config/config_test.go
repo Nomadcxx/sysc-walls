@@ -8,8 +8,19 @@ import (
 	"time"
 )
 
+func TestBrokenEffectsAreUnavailable(t *testing.T) {
+	for _, effect := range []string{"ak-47-rama", "justice-cross"} {
+		for _, available := range AvailableEffects {
+			if available == effect {
+				t.Errorf("unfinished effect %q is listed as available", effect)
+			}
+		}
+	}
+}
+
 // TestNewConfig verifies default configuration values
 func TestNewConfig(t *testing.T) {
+	isolateShellTheme(t)
 	cfg := NewConfig()
 
 	if cfg == nil {
@@ -175,6 +186,7 @@ func TestConfigGettersSetters(t *testing.T) {
 
 // TestLoadFromFile tests loading configuration from file
 func TestLoadFromFile(t *testing.T) {
+	isolateShellTheme(t)
 	// Create temporary directory for test configs
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test.conf")
@@ -263,6 +275,7 @@ fullscreen = false
 
 // TestSaveToFile tests saving configuration to file
 func TestSaveToFile(t *testing.T) {
+	isolateShellTheme(t)
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "save-test.conf")
 
@@ -361,6 +374,7 @@ func TestGetTerminalArgs(t *testing.T) {
 
 // TestGetScreensaverCommand tests screensaver command generation
 func TestGetScreensaverCommand(t *testing.T) {
+	isolateShellTheme(t)
 	cfg := NewConfig()
 	cfg.SetAnimationEffect("matrix")
 	cfg.SetAnimationTheme("nord")
@@ -414,6 +428,7 @@ func TestGetScreensaverCommand(t *testing.T) {
 }
 
 func TestGetScreensaverCommandFireTextDisablesDatetime(t *testing.T) {
+	isolateShellTheme(t)
 	cfg := NewConfig()
 	cfg.SetAnimationEffect("fire-text")
 	cfg.SetAnimationTheme("nord")
@@ -448,6 +463,7 @@ func TestGetScreensaverCommandFireTextDisablesDatetime(t *testing.T) {
 }
 
 func TestGetScreensaverCommandBeamTextAllowsDatetime(t *testing.T) {
+	isolateShellTheme(t)
 	cfg := NewConfig()
 	cfg.SetAnimationEffect("beam-text")
 	cfg.SetAnimationTheme("nord")

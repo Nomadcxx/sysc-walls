@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -63,6 +64,7 @@ func printUsage() {
 	fmt.Println("\nSet commands:")
 	fmt.Println("  sysc-walls set effect matrix")
 	fmt.Println("  sysc-walls set theme dracula")
+	fmt.Println("  sysc-walls set follow-shell true|false")
 	fmt.Println("  sysc-walls set timeout 5m")
 	fmt.Println("  sysc-walls set kitty")
 	fmt.Println("  sysc-walls set fullscreen")
@@ -93,6 +95,14 @@ func handleSetCommand(key, value string) {
 			os.Exit(1)
 		}
 		confirm = fmt.Sprintf("Set animation theme to: %s", value)
+	case "follow-shell":
+		follow, err := strconv.ParseBool(value)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error setting shell theme following: invalid boolean %q\n", value)
+			os.Exit(1)
+		}
+		cfg.SetFollowShellTheme(follow)
+		confirm = fmt.Sprintf("Follow sysc-shell theme: %t", follow)
 	case "timeout":
 		if err := cfg.SetIdleTimeout(value); err != nil {
 			fmt.Fprintf(os.Stderr, "Error setting timeout: %v\n", err)

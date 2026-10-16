@@ -3,15 +3,12 @@ package animations
 import (
 	"strings"
 	"testing"
+
+	syscGo "github.com/Nomadcxx/sysc-Go/animations"
 )
 
-// allEffectNames is every effect the registry accepts, so the guard is proven
-// against the whole set rather than the two that were reported.
-var allEffectNames = []string{
-	"matrix", "matrix-art", "fire", "fire-text", "fireworks", "rain",
-	"rain-art", "beams", "beam-text", "decrypt", "pour", "aquarium",
-	"print", "blackhole", "ring-text",
-}
+// Keep edge-case coverage in sync with the upstream effect registry.
+var allEffectNames = syscGo.GetEffectNames()
 
 // TestEffectsDoNotPanicOnSmallTerminals drives every effect at a range of
 // undersized and degenerate terminals.

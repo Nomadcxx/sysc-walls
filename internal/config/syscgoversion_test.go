@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	syscGo "github.com/Nomadcxx/sysc-Go/animations"
 	"github.com/Nomadcxx/sysc-walls/internal/version"
 )
 
@@ -15,5 +16,11 @@ func TestEnforcedMinimumMatchesAdvertised(t *testing.T) {
 	}
 	if !strings.HasSuffix(version.SyscGoVersion, MinimumSyscGoVersion) {
 		t.Errorf("advertised %q does not carry the enforced minimum %q", version.SyscGoVersion, MinimumSyscGoVersion)
+	}
+}
+
+func TestMinimumSyscGoVersionMatchesRequiredEffectLibrary(t *testing.T) {
+	if got, want := version.MinSyscGoVersion, syscGo.GetLibraryVersion(); got != want {
+		t.Errorf("minimum sysc-Go version = %q, built library = %q", got, want)
 	}
 }

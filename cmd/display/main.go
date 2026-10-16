@@ -30,7 +30,7 @@ func loadTextContent(customPath string, debug bool) string {
 			if debug {
 				fmt.Fprintf(os.Stderr, "Loaded text from: %s\n", customPath)
 			}
-			return strings.TrimSpace(string(content))
+			return normalizeTextContent(content)
 		} else if debug {
 			fmt.Fprintf(os.Stderr, "Failed to load custom text file %s: %v\n", customPath, err)
 		}
@@ -49,6 +49,12 @@ func loadTextContent(customPath string, debug bool) string {
 		)
 	}
 
+	// Packaged builds can point at artwork in an immutable location such as
+	// the Nix store while user-provided art above keeps precedence.
+	if asciiDir := os.Getenv("SYSC_WALLS_ASCII_DIR"); asciiDir != "" {
+		defaultPaths = append(defaultPaths, filepath.Join(asciiDir, "SYSC.txt"))
+	}
+
 	// System-wide paths (always available)
 	defaultPaths = append(defaultPaths,
 		"/usr/share/sysc-walls/ascii/SYSC.txt", // AUR package location
@@ -62,7 +68,7 @@ func loadTextContent(customPath string, debug bool) string {
 			if debug {
 				fmt.Fprintf(os.Stderr, "Loaded ASCII art from: %s\n", path)
 			}
-			return strings.TrimSpace(string(content))
+			return normalizeTextContent(content)
 		}
 	}
 
@@ -71,6 +77,11 @@ func loadTextContent(customPath string, debug bool) string {
 		fmt.Fprintf(os.Stderr, "Warning: No ASCII art files found, using fallback text\n")
 	}
 	return "SYSC-WALLS"
+}
+
+func normalizeTextContent(content []byte) string {
+	text := strings.ReplaceAll(string(content), "\r\n", "\n")
+	return strings.TrimRight(text, "\n")
 }
 
 // isTextBasedEffect checks if an effect uses text content

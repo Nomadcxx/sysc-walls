@@ -7,7 +7,7 @@
 ---
 
 <div align="center">
-  <img src="assets/showcase.gif" alt="sysc-walls showcase" width="800">
+  <img src="assets/showcase.webp" alt="sysc-walls showcase" width="800">
 </div>
 
 ---
@@ -129,38 +129,38 @@ sysc-walls-daemon -demo
 ### Standalone Effects
 
 #### Fire
-![Fire Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fire.gif)
+![Fire Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fire.webp)
 
 #### Rain
-![ASCII Rain](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/rain.gif)
+![ASCII Rain](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/rain.webp)
 
 #### Fireworks
-![Fireworks](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fireworks.gif)
+![Fireworks](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fireworks.webp)
 
 #### Beams
-![Beams Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/beams.gif)
+![Beams Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/beams.webp)
 
 #### Aquarium
-![Aquarium Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/aquarium.gif)
+![Aquarium Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/aquarium.webp)
 
 ### Text Effects
 
 Text effects require ASCII art via the `file` config option.
 
 #### Fire Text
-![Fire Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fire-text.gif)
+![Fire Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fire-text.webp)
 
 #### Rain Art
-![Rain Art Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/rain-text.gif)
+![Rain Art Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/rain-art.webp)
 
 #### Beam Text
-![Beam Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/beam-text.gif)
+![Beam Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/beam-text.webp)
 
 #### Ring Text
-![Ring Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/ring-text.gif)
+![Ring Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/ring-text.webp)
 
 #### Blackhole
-![Blackhole Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/blackhole.gif)
+![Blackhole Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/blackhole.webp)
 
 ### Available Themes
 

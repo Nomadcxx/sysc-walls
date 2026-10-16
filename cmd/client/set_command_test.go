@@ -25,7 +25,8 @@ func TestMain(m *testing.M) {
 	}
 	clientBin = filepath.Join(dir, "client")
 
-	build := exec.Command("go", "build", "-o", clientBin, ".")
+	// These tests exercise CLI behavior, not checkout VCS metadata.
+	build := exec.Command("go", "build", "-buildvcs=false", "-o", clientBin, ".")
 	if out, err := build.CombinedOutput(); err != nil {
 		panic("building client: " + err.Error() + "\n" + string(out))
 	}

@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/logo.png" alt="sysc-walls">
+  <img src="assets/header.webp" alt="sysc-walls">
 
   **A terminal screensaver, designed in Go and built for Wayland**
 </div>
@@ -7,7 +7,7 @@
 ---
 
 <div align="center">
-  <img src="assets/showcase.webp" alt="sysc-walls showcase" width="800">
+  <img src="assets/showcase.webp" alt="sysc-walls showcase" width="800" loading="lazy">
 </div>
 
 ---
@@ -126,43 +126,48 @@ sysc-walls uses [sysc-Go](https://github.com/Nomadcxx/sysc-Go) for its animation
 sysc-walls-daemon -demo
 ```
 
-![Matrix Rain Showcase](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/matrix.webp)
+<details>
+<summary>View the effects gallery</summary>
 
-![AK-47 Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/ak-47-text.webp)
+<img src="https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/matrix.webp" alt="Matrix Rain Showcase" loading="lazy">
+
+<img src="https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/ak-47-text.webp" alt="AK-47 Text Effect" loading="lazy">
 
 ### More Effects
 
 The gallery lists the remaining effects newest to oldest. Text effects read ASCII art from the configured file.
 
 #### Fire Text
-![Fire Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fire-text.webp)
+<img src="https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fire-text.webp" alt="Fire Text Effect" loading="lazy">
 
 #### Blackhole
-![Blackhole Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/blackhole.webp)
+<img src="https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/blackhole.webp" alt="Blackhole Effect" loading="lazy">
 
 #### Ring Text
-![Ring Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/ring-text.webp)
+<img src="https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/ring-text.webp" alt="Ring Text Effect" loading="lazy">
 
 #### Rain Art
-![Rain Art Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/rain-art.webp)
+<img src="https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/rain-art.webp" alt="Rain Art Effect" loading="lazy">
 
 #### Beam Text
-![Beam Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/beam-text.webp)
+<img src="https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/beam-text.webp" alt="Beam Text Effect" loading="lazy">
 
 #### Aquarium
-![Aquarium Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/aquarium.webp)
+<img src="https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/aquarium.webp" alt="Aquarium Effect" loading="lazy">
 
 #### Beams
-![Beams Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/beams.webp)
+<img src="https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/beams.webp" alt="Beams Effect" loading="lazy">
 
 #### Fireworks
-![Fireworks](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fireworks.webp)
+<img src="https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fireworks.webp" alt="Fireworks" loading="lazy">
 
 #### Rain
-![ASCII Rain](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/rain.webp)
+<img src="https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/rain.webp" alt="ASCII Rain" loading="lazy">
 
 #### Fire
-![Fire Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fire.webp)
+<img src="https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fire.webp" alt="Fire Effect" loading="lazy">
+
+</details>
 
 ### Available Themes
 

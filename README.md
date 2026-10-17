@@ -126,29 +126,22 @@ sysc-walls uses [sysc-Go](https://github.com/Nomadcxx/sysc-Go) for its animation
 sysc-walls-daemon -demo
 ```
 
-### Standalone Effects
+![Matrix Rain Showcase](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/matrix.webp)
 
-#### Fire
-![Fire Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fire.webp)
+![AK-47 Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/ak-47-text.webp)
 
-#### Rain
-![ASCII Rain](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/rain.webp)
+### More Effects
 
-#### Fireworks
-![Fireworks](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fireworks.webp)
-
-#### Beams
-![Beams Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/beams.webp)
-
-#### Aquarium
-![Aquarium Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/aquarium.webp)
-
-### Text Effects
-
-Text effects require ASCII art via the `file` config option.
+The gallery lists the remaining effects newest to oldest. Text effects read ASCII art from the configured file.
 
 #### Fire Text
 ![Fire Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fire-text.webp)
+
+#### Blackhole
+![Blackhole Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/blackhole.webp)
+
+#### Ring Text
+![Ring Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/ring-text.webp)
 
 #### Rain Art
 ![Rain Art Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/rain-art.webp)
@@ -156,11 +149,20 @@ Text effects require ASCII art via the `file` config option.
 #### Beam Text
 ![Beam Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/beam-text.webp)
 
-#### Ring Text
-![Ring Text Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/ring-text.webp)
+#### Aquarium
+![Aquarium Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/aquarium.webp)
 
-#### Blackhole
-![Blackhole Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/blackhole.webp)
+#### Beams
+![Beams Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/beams.webp)
+
+#### Fireworks
+![Fireworks](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fireworks.webp)
+
+#### Rain
+![ASCII Rain](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/rain.webp)
+
+#### Fire
+![Fire Effect](https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/assets/fire.webp)
 
 ### Available Themes
 

@@ -1,5 +1,7 @@
 github.com/Nomadcxx/sysc-Go v1.0.9-0.20261022010724-1fa198051d89 h1:bjVPulbyc70u5M7UpT9SfTPaBOmeWArXrgB9W1etlrg=
 github.com/Nomadcxx/sysc-Go v1.0.9-0.20261022010724-1fa198051d89/go.mod h1:aVjiviCJEgKIQy0AZ2uQbf+V36JG8ZQLDO4ZtZ9wcQk=
+github.com/Nomadcxx/sysc-Go v1.0.9-0.20261022080948-51b43b6e52a7 h1:SdldQINWd6426429uBNO5pTk8U1C1os60Ss9GmuBtjM=
+github.com/Nomadcxx/sysc-Go v1.0.9-0.20261022080948-51b43b6e52a7/go.mod h1:aVjiviCJEgKIQy0AZ2uQbf+V36JG8ZQLDO4ZtZ9wcQk=
 github.com/aymanbagabas/go-osc52/v2 v2.0.1 h1:HwpRHbFMcZLEVr42D4p7XBqjyuxQH5SMiErDT4WkJ2k=
 github.com/aymanbagabas/go-osc52/v2 v2.0.1/go.mod h1:uYgXzlJ7ZpABp8OJ+exZzJJhRNQ2ASbcXHWsFqH8hp8=
 github.com/charmbracelet/bubbles v0.21.0 h1:9TdC97SdRVg/1aaXNVWfFH3nnLAwOXr8Fn6u6mfQdFs=

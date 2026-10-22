@@ -209,7 +209,16 @@ These names match the enabled effect IDs from sysc-Go. Text effects use the ASCI
 
 Text effects: `matrix-art`, `fire-text`, `rain-art`, `beam-text`, `decrypt`, `pour`, `print`, `blackhole`, `ring-text`, `ak-47-text`.
 
-Standalone effects: `matrix`, `fire`, `fireworks`, `rain`, `beams`, `aquarium`, `skull`, `sonar`, `cracktro`, `sysc-logo`, `cross-logo`, `logo-morph`, `ak-47`, `great-wave`, `wasteland`.
+Standalone effects: `matrix`, `fire`, `fireworks`, `rain`, `beams`, `aquarium`, `skull`, `sonar`, `cracktro`, `sysc-logo`, `cross-logo`, `logo-morph`, `ansi-love`, `ak-47`, `l2a1-sar`, `great-wave`, `wasteland`.
+
+Rotating model effects: `jesus-christ-statue`, `jason`, `nymphe-der-flora`, `lowe`, `roman-gladiator`, `grabfigur`, `laocoon-and-his-sons`, `napoleon-bust`, `brandenburg-gate`, `louis-xiv`, `engel`, `st-george`, `santa-muerte`, `aspasia`, `st-nepomuk`, `lion-statue`, `f-14-tomcat`, `f-15e-strike-eagle`, `f-22-raptor`, `fa-18e-super-hornet`.
+
+Preview a rotating aircraft, then make it the screensaver effect:
+
+```sh
+sysc-walls test f-14-tomcat kanagawa
+sysc-walls set effect f-14-tomcat
+```
 
 **Available themes:**
 `dracula`, `catppuccin`, `catppuccin-mocha`, `nord`, `tokyo-night` (`tokyonight`), `gruvbox`, `material`, `solarized`, `monochrome`, `transishardjob`, `rama`, `eldritch`, `dark`, `ayu`, `amber`, `blue`, `purple`, `green`, `orange`, `rose-pine`, `kanagawa`, `noctalia`, `eldritch-abyss`, `void`, `red`, `cyan`, `coral`, `pink`
@@ -269,7 +278,7 @@ Renders [sysc-Go](https://github.com/Nomadcxx/sysc-Go) animations in fullscreen 
 
 Optional CLI for testing. Not needed for normal operation.
 
-Config lives in `~/.config/sysc-walls/daemon.conf` (see [internal/config/](internal/config/)). Build uses [sysc-Go](https://github.com/Nomadcxx/sysc-Go) as a Go module dependency (v1.0.7+).
+Config lives in `~/.config/sysc-walls/daemon.conf` (see [internal/config/](internal/config/)). Build uses [sysc-Go](https://github.com/Nomadcxx/sysc-Go) as a Go module dependency (v1.0.10+).
 
 Datetime behavior:
 - Text-updatable effects (`fire-text`, `matrix-art`, `rain-art`, `beam-text`, `decrypt`, `pour`, `print`, `blackhole`, `ring-text`) render the clock as live text inside the effect.
@@ -335,7 +344,7 @@ Have a feature request? Open an issue on [GitHub](https://github.com/Nomadcxx/sy
 
 ## License
 
-GPL-3.0
+GPL-3.0. Model and dependency notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ---
 

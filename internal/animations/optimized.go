@@ -98,6 +98,8 @@ func CreateOptimizedAnimationWithText(effect string, width, height int, theme st
 		return newOptimizedBlackhole(width, height, palette, text)
 	case "ring-text":
 		return newOptimizedRingText(width, height, palette, text)
+	case "ansi-love":
+		return newOptimizedSyscGo(syscGo.NewANSILoveEffect(width, height, theme)), nil
 	case "ak-47-text":
 		animation, err := syscGo.NewAK47TextEffect(width, height, theme, text)
 		if err != nil {
@@ -106,6 +108,8 @@ func CreateOptimizedAnimationWithText(effect string, width, height int, theme st
 		return newOptimizedSyscGo(animation), nil
 	case "ak-47":
 		return newOptimizedSyscGo(syscGo.NewAK47Effect(width, height, theme)), nil
+	case "l2a1-sar":
+		return newOptimizedSyscGo(syscGo.NewL2A1SAREffect(width, height, theme)), nil
 	case "great-wave":
 		animation, err := syscGo.NewGreatWaveEffect(width, height, theme)
 		if err != nil {
@@ -131,6 +135,10 @@ func CreateOptimizedAnimationWithText(effect string, width, height int, theme st
 	case "logo-morph":
 		return newOptimizedLogoSpin(width, height, theme, "sysc-cross"), nil
 	default:
+		model, err := syscGo.NewRotatingModelEffect(effect, width, height, theme)
+		if err == nil {
+			return newOptimizedSyscGo(model), nil
+		}
 		return nil, fmt.Errorf("unknown animation effect: %s", effect)
 	}
 }

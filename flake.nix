@@ -42,6 +42,7 @@
                 --set SYSC_WALLS_ASCII_DIR "$out/share/sysc-walls/ascii"
 
               install -Dm644 README.md "$out/share/doc/sysc-walls/README.md"
+              install -Dm644 THIRD_PARTY_NOTICES.md "$out/share/doc/sysc-walls/THIRD_PARTY_NOTICES.md"
               install -Dm644 TROUBLESHOOTING.md "$out/share/doc/sysc-walls/TROUBLESHOOTING.md"
               install -Dm644 LICENSE "$out/share/licenses/sysc-walls/LICENSE"
             '';

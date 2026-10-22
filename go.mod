@@ -3,7 +3,7 @@ module github.com/Nomadcxx/sysc-walls
 go 1.24.2
 
 require (
-	github.com/Nomadcxx/sysc-Go v1.0.7
+	github.com/Nomadcxx/sysc-Go v1.0.9-0.20261022010724-1fa198051d89
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0

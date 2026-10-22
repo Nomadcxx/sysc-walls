@@ -37,6 +37,10 @@ contents:
     dst: /usr/share/doc/sysc-walls/README.md
     file_info:
       mode: 0644
+  - src: ./THIRD_PARTY_NOTICES.md
+    dst: /usr/share/doc/sysc-walls/THIRD_PARTY_NOTICES.md
+    file_info:
+      mode: 0644
   - src: ./TROUBLESHOOTING.md
     dst: /usr/share/doc/sysc-walls/TROUBLESHOOTING.md
     file_info:

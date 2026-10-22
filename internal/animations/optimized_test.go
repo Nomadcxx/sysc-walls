@@ -8,14 +8,15 @@ import (
 )
 
 func TestSyscGoRegistryEffectsCanBeConstructed(t *testing.T) {
-	newTerminalEffects := []string{
+	expectedEffects := []string{
 		"skull", "sonar", "cracktro", "sysc-logo", "cross-logo", "logo-morph",
 		"ak-47", "ak-47-text", "great-wave", "wasteland",
+		"f-14-tomcat", "f-15e-strike-eagle", "f-22-raptor", "fa-18e-super-hornet",
 	}
 	effectNames := syscGo.GetEffectNames()
-	for _, effect := range newTerminalEffects {
+	for _, effect := range expectedEffects {
 		if !slices.Contains(effectNames, effect) {
-			t.Fatalf("sysc-Go registry is missing sysc-terminal effect %q", effect)
+			t.Fatalf("sysc-Go registry is missing effect %q", effect)
 		}
 	}
 

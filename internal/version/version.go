@@ -8,7 +8,7 @@ package version
 // used to be declared separately and drifted apart, so a user on an
 // intermediate release was told they met the requirement and then the daemon
 // refused to start.
-const MinSyscGoVersion = "1.0.7"
+const MinSyscGoVersion = "1.0.10"
 
 // SyscGoVersion is the minimum required sysc-Go version, in the prefixed form
 // used by the sysc-Go release tags.

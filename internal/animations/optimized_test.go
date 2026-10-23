@@ -74,6 +74,23 @@ func TestSyscShellThemesUseSyscGoScreensaverPalettes(t *testing.T) {
 	}
 }
 
+type cellAspectEffect struct {
+	width, height int
+}
+
+func (e *cellAspectEffect) Update()                {}
+func (e *cellAspectEffect) Render() string         { return "frame" }
+func (e *cellAspectEffect) Resize(int, int)        {}
+func (e *cellAspectEffect) SetCellAspect(w, h int) { e.width, e.height = w, h }
+
+func TestOptimizedSyscGoForwardsCellAspect(t *testing.T) {
+	effect := &cellAspectEffect{}
+	newOptimizedSyscGo(effect).SetCellAspect(9, 20)
+	if effect.width != 9 || effect.height != 20 {
+		t.Fatalf("cell aspect = %dx%d, want 9x20", effect.width, effect.height)
+	}
+}
+
 // TestCreateOptimizedAnimation tests animation creation
 func TestCreateOptimizedAnimation(t *testing.T) {
 	tests := []struct {

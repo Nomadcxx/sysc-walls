@@ -191,6 +191,16 @@ func setAnimationClockText(anim animations.Animation, effectName, position strin
 	return true, clockText
 }
 
+func applyTerminalCellAspect(anim animations.Animation) {
+	cellWidth, cellHeight := utils.GetTerminalCellSize()
+	if cellWidth <= 0 || cellHeight <= 0 {
+		return
+	}
+	if sized, ok := anim.(interface{ SetCellAspect(int, int) }); ok {
+		sized.SetCellAspect(cellWidth, cellHeight)
+	}
+}
+
 // dimANSIColors reduces the intensity of ANSI RGB colors by a factor
 // factor should be between 0.0 (black) and 1.0 (original)
 func dimANSIColors(text string, factor float64) string {
@@ -436,6 +446,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error creating animation: %v\n", err)
 		os.Exit(1)
 	}
+	applyTerminalCellAspect(anim)
 
 	// Setup terminal
 	if !*noClear {
@@ -560,6 +571,7 @@ func main() {
 							lastClockText = clockText
 						}
 					}
+					applyTerminalCellAspect(anim)
 				}
 			}
 		}

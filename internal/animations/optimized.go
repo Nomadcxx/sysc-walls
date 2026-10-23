@@ -171,6 +171,12 @@ func (a *optimizedSyscGo) Resize(width, height int) {
 	a.effect.Resize(width, height)
 }
 
+func (a *optimizedSyscGo) SetCellAspect(width, height int) {
+	if effect, ok := a.effect.(interface{ SetCellAspect(int, int) }); ok {
+		effect.SetCellAspect(width, height)
+	}
+}
+
 // SkullAnimation has no Resize method, so rebuild it with the current size.
 type optimizedSkull struct {
 	effect        *syscGo.SkullAnimation

@@ -72,6 +72,39 @@ func GetTerminalSize() (int, int, error) {
 	return cols, lines, fmt.Errorf("could not determine terminal size, using fallback: %dx%d (errno: %v)", cols, lines, errno)
 }
 
+// GetTerminalCellSize reports the pixel dimensions of one terminal cell.
+// A zero result means the terminal did not provide pixel geometry.
+func GetTerminalCellSize() (int, int) {
+	read := func(fd uintptr) (int, int, bool) {
+		ws := &winsize{}
+		retCode, _, _ := syscall.Syscall(syscall.SYS_IOCTL, fd,
+			uintptr(syscall.TIOCGWINSZ), uintptr(unsafe.Pointer(ws)))
+		if int(retCode) == -1 {
+			return 0, 0, false
+		}
+		width, height := terminalCellSize(ws)
+		return width, height, width > 0 && height > 0
+	}
+	if width, height, ok := read(uintptr(syscall.Stdout)); ok {
+		return width, height
+	}
+	ttyFile, err := os.Open("/dev/tty")
+	if err != nil {
+		return 0, 0
+	}
+	defer ttyFile.Close()
+	width, height, _ := read(ttyFile.Fd())
+	return width, height
+}
+
+func terminalCellSize(ws *winsize) (int, int) {
+	if ws.Col == 0 || ws.Row == 0 || ws.Xpixel == 0 || ws.Ypixel == 0 {
+		return 0, 0
+	}
+	return (int(ws.Xpixel) + int(ws.Col)/2) / int(ws.Col),
+		(int(ws.Ypixel) + int(ws.Row)/2) / int(ws.Row)
+}
+
 // getTerminalSizeTput gets terminal size using tput
 func getTerminalSizeTput() (int, int, error) {
 	// Try to use tput if available

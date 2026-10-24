@@ -7,7 +7,7 @@
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
-      version = "1.3.0";
+      version = "1.4.0";
     in
     {
       packages = forAllSystems (system:

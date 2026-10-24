@@ -20,7 +20,7 @@
             inherit version;
             src = self;
 
-            vendorHash = "sha256-etw1lTGVJiJKo67rIEpuuWgpUyXeAsnx46K2YnA2/BA=";
+            vendorHash = "sha256-BXTRt72JQp06GZPu98rOuVROZDpwI9DzhynZCSqNeaw=";
             subPackages = [ "cmd/daemon" "cmd/display" "cmd/client" ];
             nativeBuildInputs = [ pkgs.makeWrapper pkgs.pkg-config ];
             buildInputs = [ pkgs.wayland ];

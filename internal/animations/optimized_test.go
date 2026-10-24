@@ -9,6 +9,7 @@ import (
 
 func TestSyscGoRegistryEffectsCanBeConstructed(t *testing.T) {
 	expectedEffects := []string{
+		"higgs-field",
 		"skull", "sonar", "cracktro", "sysc-logo", "cross-logo", "logo-morph",
 		"ak-47", "ak-47-text", "great-wave", "wasteland",
 		"f-14-tomcat", "f-15e-strike-eagle", "f-22-raptor", "fa-18e-super-hornet",

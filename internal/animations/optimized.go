@@ -108,6 +108,8 @@ func CreateOptimizedAnimationWithText(effect string, width, height int, theme st
 		return newOptimizedSyscGo(animation), nil
 	case "ak-47":
 		return newOptimizedSyscGo(syscGo.NewAK47Effect(width, height, theme)), nil
+	case "higgs-field":
+		return newOptimizedSyscGo(syscGo.NewHiggsFieldEffect(width, height, theme)), nil
 	case "l2a1-sar":
 		return newOptimizedSyscGo(syscGo.NewL2A1SAREffect(width, height, theme)), nil
 	case "great-wave":

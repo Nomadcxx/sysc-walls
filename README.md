@@ -7,7 +7,7 @@
 ---
 
 <div align="center">
-  <img src="assets/showcase.webp" alt="sysc-walls tour: SYSC wordmark text effects, Napoleon, Higgs Field, sonar and particle models" width="800" loading="lazy">
+  <img src="assets/showcase.webp" alt="sysc-walls tour: SYSC wordmark text effects, particle backgrounds and logo morphing" width="800" loading="lazy">
 </div>
 
 ---

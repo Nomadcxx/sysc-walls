@@ -12,13 +12,13 @@ class TourTest(unittest.TestCase):
         scenes = tour.parse_timeline(Path(__file__).with_name("tour.timeline").read_text())
         self.assertTrue(200 <= sum(seconds for seconds, _ in scenes) <= 240)
         self.assertEqual([args[0] for _, args in scenes], [
-            "ak-47-text", "matrix-art", "fire-text", "rain-art", "napoleon-bust",
+            "ak-47-text", "matrix-art", "fire-text", "napoleon-bust",
             "higgs-field", "sysc-logo", "sonar", "lowe", "jason", "wasteland",
-            "f-22-raptor", "f-14-tomcat", "roman-gladiator"])
+            "f-22-raptor", "f-14-tomcat", "roman-gladiator", "logo-morph", "grabfigur"])
         holds = {args[0]: seconds for seconds, args in scenes}
-        self.assertGreaterEqual(holds["rain-art"], 60)
+        self.assertGreaterEqual(holds["logo-morph"], 28.8)
         self.assertGreaterEqual(holds["napoleon-bust"], 20)
-        for effect in ("lowe", "jason", "f-22-raptor", "f-14-tomcat", "roman-gladiator"):
+        for effect in ("lowe", "jason", "f-22-raptor", "f-14-tomcat", "roman-gladiator", "grabfigur"):
             self.assertGreaterEqual(holds[effect], 12)
         self.assertIn("higgs-field", [args[0] for _, args in scenes])
         self.assertIn("napoleon-bust", [args[0] for _, args in scenes])

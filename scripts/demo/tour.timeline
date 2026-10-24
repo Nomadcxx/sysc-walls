@@ -1,0 +1,18 @@
+# Seconds at native speed, effect, theme, optional display flags.
+# Default wordmark: bundled assets/ascii/SYSC.txt.
+# Capture complete reveals and cycles, then accelerate the whole recording to 80 seconds.
+# Rain's full wordmark takes about 50-53 seconds at 160x40; allow 60 seconds.
+14.5 ak-47-text gruvbox
+11.5 matrix-art tokyo-night
+5 fire-text rama
+60 rain-art nord
+20.5 napoleon-bust nord
+20.5 higgs-field tokyo-night
+7.5 sysc-logo nord
+12.5 sonar rama
+12.5 lowe nord
+12.5 jason gruvbox
+5 wasteland gruvbox
+12.5 f-22-raptor dracula
+12.5 f-14-tomcat tokyo-night
+12.5 roman-gladiator nord

@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# Supersede in-flight runs for the same branch or PR so a burst of pushes does
+# not queue a full build each. Default-branch pushes are exempt: every merge to
+# master gets its own full run and verdict instead of a "cancelled" result.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != format('refs/heads/{0}', github.event.repository.default_branch) }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # pkg/idle is the ecosystem's only handwritten C. CGO stays on so the
+    # idle monitor is compiled by every step, not only at release time.
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install Wayland build dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential pkg-config libwayland-dev wayland-protocols
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: vet
+        run: go vet ./...
+      - name: test
+        run: go test -race -count=1 ./...
+      - name: build
+        run: go build ./...
+      # Keep the CGO compile as its own named step: a failure here names the
+      # idle monitor directly instead of surfacing somewhere in ./...
+      - name: build the CGO idle monitor
+        run: go build ./pkg/idle

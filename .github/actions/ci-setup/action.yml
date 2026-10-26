@@ -1,0 +1,10 @@
+name: CI setup
+
+description: Install the native headers required by sysc-walls.
+
+runs:
+  using: composite
+  steps:
+    - name: Install Wayland development packages
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential pkg-config libwayland-dev wayland-protocols

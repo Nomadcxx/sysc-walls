@@ -31,27 +31,50 @@ var AvailableThemes = syscGo.GetThemeNames()
 // enforced one cannot drift apart again.
 const MinimumSyscGoVersion = version.MinSyscGoVersion
 
-// findDisplayBinary locates sysc-walls-display in standard locations
-func findDisplayBinary() (string, error) {
-	// Try PATH first (works for both /usr/bin and /usr/local/bin)
+// FindDisplayBinary locates sysc-walls-display beside the current binary,
+// under the user's local bin directory, or in the usual executable paths.
+func FindDisplayBinary() (string, error) {
+	executablePath, _ := os.Executable()
+	homeDir, _ := os.UserHomeDir()
+	return findDisplayBinary(executablePath, homeDir)
+}
+
+func findDisplayBinary(executablePath, homeDir string) (string, error) {
+	if executablePath != "" {
+		if resolved, err := filepath.EvalSymlinks(executablePath); err == nil {
+			resolved = filepath.Clean(resolved)
+			if resolved != "/proc" && !strings.HasPrefix(resolved, "/proc/") {
+				if path, err := exec.LookPath(filepath.Join(filepath.Dir(resolved), "sysc-walls-display")); err == nil {
+					return path, nil
+				}
+			}
+		}
+	}
+
+	if homeDir != "" {
+		if path, err := exec.LookPath(filepath.Join(homeDir, ".local", "bin", "sysc-walls-display")); err == nil {
+			return path, nil
+		}
+	}
+
 	if path, err := exec.LookPath("sysc-walls-display"); err == nil {
 		return path, nil
 	}
 
-	// Fallback to common locations
+	// Keep the working-directory lookup last; it is useful for development but
+	// systemd services do not have a meaningful repository working directory.
 	locations := []string{
-		"/usr/bin/sysc-walls-display",       // AUR/system package
-		"/usr/local/bin/sysc-walls-display", // Manual install
-		"./sysc-walls-display",              // Current directory (development)
+		"/usr/bin/sysc-walls-display",
+		"/usr/local/bin/sysc-walls-display",
+		"./sysc-walls-display",
 	}
-
 	for _, loc := range locations {
-		if _, err := os.Stat(loc); err == nil {
-			return loc, nil
+		if path, err := exec.LookPath(loc); err == nil {
+			return path, nil
 		}
 	}
 
-	return "", fmt.Errorf("sysc-walls-display binary not found in PATH or standard locations")
+	return "", fmt.Errorf("sysc-walls-display binary not found beside executable, under ~/.local/bin, in PATH, or in standard locations")
 }
 
 // Config represents the daemon configuration
@@ -764,7 +787,7 @@ func (c *Config) GetScreensaverCommand() (string, []string, error) {
 	}
 
 	// Find display binary
-	displayBinary, err := findDisplayBinary()
+	displayBinary, err := FindDisplayBinary()
 	if err != nil {
 		return "", nil, err
 	}

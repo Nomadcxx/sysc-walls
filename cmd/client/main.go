@@ -141,7 +141,7 @@ func handleRunCommand(args []string) {
 	cfg := loadConfig()
 
 	// Get display binary
-	displayBinary, err := findDisplayBinary()
+	displayBinary, err := config.FindDisplayBinary()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -159,7 +159,7 @@ func handleTestCommand(args []string) {
 	cfg := loadConfig()
 
 	// Get display binary
-	displayBinary, err := findDisplayBinary()
+	displayBinary, err := config.FindDisplayBinary()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -243,23 +243,6 @@ func defaultConfigPath() string {
 		os.Exit(1)
 	}
 	return filepath.Join(homeDir, ".config", "sysc-walls", "daemon.conf")
-}
-
-// findDisplayBinary finds the sysc-walls-display binary
-func findDisplayBinary() (string, error) {
-	// Check common locations
-	paths := []string{
-		"/usr/local/bin/sysc-walls-display",
-		"sysc-walls-display", // Check PATH
-	}
-
-	for _, path := range paths {
-		if _, err := exec.LookPath(path); err == nil {
-			return path, nil
-		}
-	}
-
-	return "", fmt.Errorf("sysc-walls-display not found in PATH or /usr/local/bin")
 }
 
 // buildDisplayArgs builds the argument list for sysc-walls-display

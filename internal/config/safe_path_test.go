@@ -104,7 +104,7 @@ func TestGetScreensaverCommandFilePathValidation(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 
-	// Fake display binary so findDisplayBinary() succeeds and the test
+	// Fake display binary so FindDisplayBinary() succeeds and the test
 	// exercises file path validation, not binary discovery.
 	tmpDir := t.TempDir()
 	fakeDisplay := filepath.Join(tmpDir, "sysc-walls-display")

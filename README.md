@@ -242,6 +242,10 @@ sudo go run cmd/installer/main.go
 git clone https://github.com/Nomadcxx/sysc-walls.git
 cd sysc-walls
 
+# The daemon links the Wayland client library for its CGO idle monitor.
+# On Debian/Ubuntu:
+sudo apt-get install -y build-essential pkg-config libwayland-dev wayland-protocols
+
 go build -o bin/sysc-walls-daemon ./cmd/daemon/
 go build -o bin/sysc-walls-display ./cmd/display/
 go build -o bin/sysc-walls-client ./cmd/client/

@@ -297,6 +297,13 @@ func TestSaveToFile(t *testing.T) {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		t.Error("SaveToFile() didn't create file")
 	}
+	saved, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("ReadFile() after save failed: %v", err)
+	}
+	if strings.Contains(string(saved), "file = ") {
+		t.Error("SaveToFile() wrote an empty animation.file key")
+	}
 
 	// Load and verify
 	cfg2 := NewConfig()
@@ -325,6 +332,112 @@ func TestSaveToFile(t *testing.T) {
 	}
 	if cfg2.GetDatetimeInterval() != 3*time.Second {
 		t.Errorf("Saved/loaded datetime interval = %v, want 3s", cfg2.GetDatetimeInterval())
+	}
+}
+
+func TestSaveToFilePreservesAnimationFile(t *testing.T) {
+	isolateShellTheme(t)
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "daemon.conf")
+	artPath := filepath.Join(tmpDir, "custom art.txt")
+	initial := "[animation]\neffect = matrix-art\ntheme = rama\nfollow_shell = false\nfile = " + artPath + "\n"
+	if err := os.WriteFile(configPath, []byte(initial), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := NewConfig()
+	if err := cfg.LoadFromFile(configPath); err != nil {
+		t.Fatalf("LoadFromFile() error = %v", err)
+	}
+	if err := cfg.SaveToFile(configPath); err != nil {
+		t.Fatalf("SaveToFile() error = %v", err)
+	}
+
+	cfg2 := NewConfig()
+	if err := cfg2.LoadFromFile(configPath); err != nil {
+		t.Fatalf("LoadFromFile() after save error = %v", err)
+	}
+	if got := cfg2.GetAnimationFile(); got != artPath {
+		t.Fatalf("animation.file after save = %q, want %q", got, artPath)
+	}
+}
+
+func TestSaveToFileAtomicallyReplacesSymlinkTarget(t *testing.T) {
+	isolateShellTheme(t)
+	tmpDir := t.TempDir()
+	target := filepath.Join(tmpDir, "daemon.conf.real")
+	configPath := filepath.Join(tmpDir, "daemon.conf")
+	initial := "[animation]\neffect = matrix-art\ntheme = rama\nfollow_shell = false\n"
+	if err := os.WriteFile(target, []byte(initial), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, configPath); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := NewConfig()
+	if err := cfg.LoadFromFile(configPath); err != nil {
+		t.Fatalf("LoadFromFile() error = %v", err)
+	}
+	if err := cfg.SaveToFile(configPath); err != nil {
+		t.Fatalf("SaveToFile() error = %v", err)
+	}
+
+	linkInfo, err := os.Lstat(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if linkInfo.Mode()&os.ModeSymlink == 0 {
+		t.Fatal("SaveToFile replaced the config symlink")
+	}
+	after, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if os.SameFile(before, after) {
+		t.Fatal("SaveToFile truncated the target in place")
+	}
+	if got := after.Mode().Perm(); got != 0o640 {
+		t.Fatalf("target mode after save = %o, want 640", got)
+	}
+}
+
+func TestSaveToFileCreatesDanglingSymlinkTarget(t *testing.T) {
+	isolateShellTheme(t)
+	tmpDir := t.TempDir()
+	targetDir := filepath.Join(tmpDir, "dotfiles")
+	if err := os.Mkdir(targetDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(targetDir, "daemon.conf")
+	configPath := filepath.Join(tmpDir, "daemon.conf")
+	if err := os.Symlink(target, configPath); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := NewConfig()
+	cfg.SetDebug(true)
+	if err := cfg.SaveToFile(configPath); err != nil {
+		t.Fatalf("SaveToFile() error = %v", err)
+	}
+
+	linkInfo, err := os.Lstat(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if linkInfo.Mode()&os.ModeSymlink == 0 {
+		t.Fatal("SaveToFile replaced the config symlink")
+	}
+	cfg2 := NewConfig()
+	if err := cfg2.LoadFromFile(configPath); err != nil {
+		t.Fatalf("LoadFromFile() after save error = %v", err)
+	}
+	if !cfg2.IsDebug() {
+		t.Fatal("SaveToFile did not write through the config symlink")
 	}
 }
 

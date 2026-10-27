@@ -451,13 +451,6 @@ func (c *Config) SaveToFile(configPath string) error {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	// Create config file
-	file, err := os.Create(expandedPath)
-	if err != nil {
-		return fmt.Errorf("failed to create config file: %w", err)
-	}
-	defer file.Close()
-
 	// Write config
 	lines := []string{
 		"# sysc-walls daemon configuration",
@@ -479,6 +472,11 @@ func (c *Config) SaveToFile(configPath string) error {
 		fmt.Sprintf("datetime = %t", c.animationDatetime),
 		fmt.Sprintf("cycle = %t", c.cycleAnimations),
 		fmt.Sprintf("cycle_interval = %s", formatDuration(c.cycleInterval)),
+	}
+	if c.animationFile != "" {
+		lines = append(lines, fmt.Sprintf("file = %s", c.animationFile))
+	}
+	lines = append(lines,
 		"",
 		"[datetime]",
 		fmt.Sprintf("position = %s", c.datetimePosition),
@@ -487,15 +485,79 @@ func (c *Config) SaveToFile(configPath string) error {
 		"[terminal]",
 		fmt.Sprintf("kitty = %t", c.terminalKitty),
 		fmt.Sprintf("fullscreen = %t", c.terminalFullscreen),
+	)
+
+	return writeConfigAtomically(expandedPath, []byte(strings.Join(lines, "\n")+"\n"))
+}
+
+func writeConfigAtomically(path string, contents []byte) error {
+	var err error
+	path, err = resolveConfigWritePath(path)
+	if err != nil {
+		return fmt.Errorf("failed to resolve config file: %w", err)
 	}
 
-	for _, line := range lines {
-		if _, err := file.WriteString(line + "\n"); err != nil {
-			return fmt.Errorf("failed to write to config file: %w", err)
-		}
+	mode := os.FileMode(0o600)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to inspect config file: %w", err)
 	}
 
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".sysc-walls-*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary config file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := tmp.Write(contents); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("failed to write temporary config file: %w", err)
+	}
+	if err := tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("failed to set config file mode: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("failed to sync temporary config file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary config file: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("failed to replace config file: %w", err)
+	}
 	return nil
+}
+
+func resolveConfigWritePath(path string) (string, error) {
+	for i := 0; i < 255; i++ {
+		info, err := os.Lstat(path)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return "", err
+			}
+			dir, err := filepath.EvalSymlinks(filepath.Dir(path))
+			if err != nil {
+				return "", err
+			}
+			return filepath.Join(dir, filepath.Base(path)), nil
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			return filepath.EvalSymlinks(path)
+		}
+		target, err := os.Readlink(path)
+		if err != nil {
+			return "", err
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(path), target)
+		}
+		path = filepath.Clean(target)
+	}
+	return "", fmt.Errorf("too many symlinks")
 }
 
 // GetIdleTimeout returns the idle timeout duration

@@ -27,7 +27,7 @@ done
 
 SYSC_WALLS_BIN=${SYSC_WALLS_BIN:-/usr/local/bin/sysc-walls-display}
 DEMO_FONT_SIZE=${DEMO_FONT_SIZE:-12}
-WANT_VERSION="sysc-walls 1.4.0"
+WANT_VERSION="sysc-walls 1.4.1"
 OUTPUT_NAME=eDP-1
 GRID_COLUMNS=(160 160)
 GRID_LINES=(40 40)

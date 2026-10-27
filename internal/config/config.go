@@ -423,16 +423,13 @@ func (c *Config) createDefaultConfig(configPath string) error {
 
 // formatDuration formats a duration as a string
 func formatDuration(d time.Duration) string {
-	if d >= time.Hour {
-		hours := int(d / time.Hour)
-		return fmt.Sprintf("%dh", hours)
-	} else if d >= time.Minute {
-		minutes := int(d / time.Minute)
-		return fmt.Sprintf("%dm", minutes)
-	} else {
-		seconds := int(d / time.Second)
-		return fmt.Sprintf("%ds", seconds)
+	if d >= time.Hour && d%time.Hour == 0 {
+		return fmt.Sprintf("%dh", d/time.Hour)
 	}
+	if d >= time.Minute && d%time.Minute == 0 {
+		return fmt.Sprintf("%dm", d/time.Minute)
+	}
+	return fmt.Sprintf("%ds", d/time.Second)
 }
 
 // SaveToFile saves the configuration to a file

@@ -183,6 +183,7 @@ Config lives at `~/.config/sysc-walls/daemon.conf`:
 [idle]
 timeout = 5m          # How long before screensaver kicks in
 min_duration = 30s    # Minimum time screensaver runs
+respect_inhibitors = true # Set false to ignore inhibitors (requires ext-idle-notify v2)
 
 [animation]
 effect = matrix-art   # Which animation to show
@@ -202,6 +203,8 @@ debug = false         # Enable detailed logging
 kitty = true          # Use Kitty terminal (required)
 fullscreen = true     # Launch fullscreen
 ```
+
+Set `respect_inhibitors = false` to use ext-idle-notify v2's input-only request. On v1 compositors, the daemon warns and continues respecting inhibitors.
 
 **Available effects:**
 

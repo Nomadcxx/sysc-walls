@@ -80,6 +80,7 @@ func findDisplayBinary(executablePath, homeDir string) (string, error) {
 // Config represents the daemon configuration
 type Config struct {
 	idleTimeout        time.Duration
+	respectInhibitors  bool
 	minDuration        time.Duration
 	debug              bool
 	animationEffect    string
@@ -99,7 +100,8 @@ type Config struct {
 func NewConfig() *Config {
 	return &Config{
 		idleTimeout:        300 * time.Second, // 5 minutes default
-		minDuration:        30 * time.Second,  // 30 seconds default
+		respectInhibitors:  true,
+		minDuration:        30 * time.Second, // 30 seconds default
 		debug:              false,
 		animationEffect:    "matrix-art",
 		animationTheme:     "rama",
@@ -208,6 +210,12 @@ func (c *Config) parseConfigLine(key, value string) {
 			}
 		} else {
 			fmt.Fprintf(os.Stderr, "Warning: Invalid idle timeout '%s': %v. Using default.\n", value, err)
+		}
+	case "idle.respect_inhibitors":
+		if boolVal, err := strconv.ParseBool(value); err == nil {
+			c.respectInhibitors = boolVal
+		} else {
+			fmt.Fprintf(os.Stderr, "Warning: Invalid idle respect_inhibitors value '%s': %v. Keeping current setting.\n", value, err)
 		}
 	case "idle.min_duration":
 		if duration, err := parseDuration(value); err == nil {
@@ -388,6 +396,7 @@ func (c *Config) createDefaultConfig(configPath string) error {
 		"[idle]",
 		fmt.Sprintf("timeout = %s", formatDuration(c.idleTimeout)),
 		fmt.Sprintf("min_duration = %s", formatDuration(c.minDuration)),
+		fmt.Sprintf("respect_inhibitors = %t", c.respectInhibitors),
 		"",
 		"[daemon]",
 		fmt.Sprintf("debug = %t", c.debug),
@@ -455,6 +464,7 @@ func (c *Config) SaveToFile(configPath string) error {
 		"[idle]",
 		fmt.Sprintf("timeout = %s", formatDuration(c.idleTimeout)),
 		fmt.Sprintf("min_duration = %s", formatDuration(c.minDuration)),
+		fmt.Sprintf("respect_inhibitors = %t", c.respectInhibitors),
 		"",
 		"[daemon]",
 		fmt.Sprintf("debug = %t", c.debug),
@@ -560,6 +570,11 @@ func resolveConfigWritePath(path string) (string, error) {
 // GetIdleTimeout returns the idle timeout duration
 func (c *Config) GetIdleTimeout() time.Duration {
 	return c.idleTimeout
+}
+
+// GetRespectInhibitors reports whether compositor idle inhibitors delay the screensaver.
+func (c *Config) GetRespectInhibitors() bool {
+	return c.respectInhibitors
 }
 
 // SetIdleTimeout sets the idle timeout duration. A non-positive timeout is

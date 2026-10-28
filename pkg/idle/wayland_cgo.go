@@ -8,7 +8,8 @@ package idle
 
 // External C functions defined in wayland_idle.c
 int wayland_cgo_init();
-int wayland_cgo_register_timeout(uint32_t timeout_ms);
+uint32_t wayland_cgo_idle_notifier_version();
+int wayland_cgo_register_timeout(uint32_t timeout_ms, int input_only);
 int wayland_cgo_dispatch();
 int wayland_cgo_get_fd();
 void wayland_cgo_cleanup();
@@ -25,6 +26,16 @@ import (
 
 	"golang.org/x/sys/unix"
 )
+
+func idleNotificationRequest(respectInhibitors bool, notifierVersion uint32) (inputOnly, warn bool) {
+	if respectInhibitors {
+		return false, false
+	}
+	if notifierVersion < 2 {
+		return false, true
+	}
+	return true, false
+}
 
 type WaylandCGODetector struct {
 	timeout     time.Duration
@@ -85,6 +96,10 @@ func goResumeCallback() {
 }
 
 func NewWaylandCGODetector(timeout time.Duration, onIdle func(), onResume func()) (*WaylandCGODetector, error) {
+	return newWaylandCGODetector(timeout, true, onIdle, onResume)
+}
+
+func newWaylandCGODetector(timeout time.Duration, respectInhibitors bool, onIdle func(), onResume func()) (*WaylandCGODetector, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	detector := &WaylandCGODetector{
@@ -108,8 +123,17 @@ func NewWaylandCGODetector(timeout time.Duration, onIdle func(), onResume func()
 	}
 
 	// Register idle timeout
+	notifierVersion := uint32(C.wayland_cgo_idle_notifier_version())
+	inputOnly, warn := idleNotificationRequest(respectInhibitors, notifierVersion)
+	if warn {
+		log.Printf("Compositor ext_idle_notifier_v1 version %d does not support ignoring idle inhibitors; respecting inhibitors", notifierVersion)
+	}
+	inputOnlyC := C.int(0)
+	if inputOnly {
+		inputOnlyC = 1
+	}
 	timeoutMs := C.uint32_t(timeout.Milliseconds())
-	ret = C.wayland_cgo_register_timeout(timeoutMs)
+	ret = C.wayland_cgo_register_timeout(timeoutMs, inputOnlyC)
 	if ret != 0 {
 		C.wayland_cgo_cleanup()
 		cancel()

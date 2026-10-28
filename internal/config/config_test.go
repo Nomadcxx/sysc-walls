@@ -31,6 +31,9 @@ func TestNewConfig(t *testing.T) {
 	if cfg.GetIdleTimeout() != 300*time.Second {
 		t.Errorf("Default idle timeout = %v, want %v", cfg.GetIdleTimeout(), 300*time.Second)
 	}
+	if !cfg.GetRespectInhibitors() {
+		t.Error("Default respect_inhibitors should be true")
+	}
 
 	if cfg.GetMinDuration() != 30*time.Second {
 		t.Errorf("Default min duration = %v, want %v", cfg.GetMinDuration(), 30*time.Second)
@@ -272,12 +275,20 @@ func TestLoadFromFile(t *testing.T) {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		t.Error("LoadFromFile() didn't create config file")
 	}
+	defaultData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(defaultData), "respect_inhibitors = true") {
+		t.Error("generated config does not document the default respect_inhibitors value")
+	}
 
 	// Test 2: Load valid config file
 	validConfig := `# Test config
 [idle]
 timeout = 10m
 min_duration = 60s
+respect_inhibitors = false
 
 [daemon]
 debug = true
@@ -313,6 +324,20 @@ fullscreen = false
 	}
 	if cfg2.GetMinDuration() != 60*time.Second {
 		t.Errorf("Loaded min_duration = %v, want 60s", cfg2.GetMinDuration())
+	}
+	if cfg2.GetRespectInhibitors() {
+		t.Error("Loaded respect_inhibitors = true, want false")
+	}
+	savedPath := filepath.Join(tmpDir, "saved.conf")
+	if err := cfg2.SaveToFile(savedPath); err != nil {
+		t.Fatalf("SaveToFile() failed: %v", err)
+	}
+	cfg3 := NewConfig()
+	if err := cfg3.LoadFromFile(savedPath); err != nil {
+		t.Fatalf("LoadFromFile(saved config) failed: %v", err)
+	}
+	if cfg3.GetRespectInhibitors() {
+		t.Error("saved respect_inhibitors = true, want false")
 	}
 	if !cfg2.IsDebug() {
 		t.Error("Loaded debug = false, want true")

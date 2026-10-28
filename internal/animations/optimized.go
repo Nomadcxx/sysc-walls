@@ -98,8 +98,6 @@ func CreateOptimizedAnimationWithText(effect string, width, height int, theme st
 		return newOptimizedBlackhole(width, height, palette, text)
 	case "ring-text":
 		return newOptimizedRingText(width, height, palette, text)
-	case "ansi-love":
-		return newOptimizedSyscGo(syscGo.NewANSILoveEffect(width, height, theme)), nil
 	case "ak-47-text":
 		animation, err := syscGo.NewAK47TextEffect(width, height, theme, text)
 		if err != nil {

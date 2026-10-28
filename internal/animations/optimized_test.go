@@ -47,7 +47,7 @@ func TestSyscGoRegistryEffectsCanBeConstructed(t *testing.T) {
 }
 
 func TestBrokenEffectsAreUnavailable(t *testing.T) {
-	for _, effect := range []string{"ak-47-rama", "justice-cross"} {
+	for _, effect := range []string{"ak-47-rama", "justice-cross", "ansi-love"} {
 		if _, err := CreateAnimation(effect, 80, 24, "nord"); err == nil {
 			t.Errorf("unfinished effect %q can be constructed", effect)
 		}

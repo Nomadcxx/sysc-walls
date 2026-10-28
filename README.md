@@ -212,7 +212,7 @@ These names match the enabled effect IDs from sysc-Go. Text effects use the ASCI
 
 Text effects: `matrix-art`, `fire-text`, `rain-art`, `beam-text`, `decrypt`, `pour`, `print`, `blackhole`, `ring-text`, `ak-47-text`.
 
-Standalone effects: `matrix`, `fire`, `fireworks`, `rain`, `beams`, `aquarium`, `skull`, `sonar`, `cracktro`, `sysc-logo`, `cross-logo`, `logo-morph`, `ansi-love`, `ak-47`, `l2a1-sar`, `great-wave`, `wasteland`.
+Standalone effects: `matrix`, `fire`, `fireworks`, `rain`, `beams`, `aquarium`, `skull`, `sonar`, `cracktro`, `sysc-logo`, `cross-logo`, `logo-morph`, `ak-47`, `l2a1-sar`, `great-wave`, `wasteland`.
 
 Rotating model effects: `jesus-christ-statue`, `jason`, `nymphe-der-flora`, `lowe`, `roman-gladiator`, `grabfigur`, `laocoon-and-his-sons`, `napoleon-bust`, `brandenburg-gate`, `louis-xiv`, `engel`, `st-george`, `santa-muerte`, `aspasia`, `st-nepomuk`, `lion-statue`, `f-14-tomcat`, `f-15e-strike-eagle`, `f-22-raptor`, `fa-18e-super-hornet`.
 

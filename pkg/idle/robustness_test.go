@@ -21,6 +21,30 @@ func testConfig(t *testing.T) *config.Config {
 	return cfg
 }
 
+func TestIdleNotificationRequest(t *testing.T) {
+	tests := []struct {
+		name              string
+		respectInhibitors bool
+		version           uint32
+		wantInputOnly     bool
+		wantWarning       bool
+	}{
+		{name: "default on v1", respectInhibitors: true, version: 1},
+		{name: "default on v2", respectInhibitors: true, version: 2},
+		{name: "opt out on v1", respectInhibitors: false, version: 1, wantWarning: true},
+		{name: "opt out on v2", respectInhibitors: false, version: 2, wantInputOnly: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inputOnly, warning := idleNotificationRequest(tt.respectInhibitors, tt.version)
+			if inputOnly != tt.wantInputOnly || warning != tt.wantWarning {
+				t.Fatalf("idleNotificationRequest(%t, %d) = (%t, %t), want (%t, %t)",
+					tt.respectInhibitors, tt.version, inputOnly, warning, tt.wantInputOnly, tt.wantWarning)
+			}
+		})
+	}
+}
+
 // TestReadXprintidleTimesOut covers the hang case from #49: xprintidle talks to
 // an X server over a socket, and a blocked Output() would park the caller
 // forever. The startup probe runs synchronously inside Start, so a hang there

@@ -37,6 +37,36 @@ func TestNewIdleDetector(t *testing.T) {
 	}
 }
 
+func TestStartWaylandIdleDetectionPassesInhibitorPreference(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "daemon.conf")
+	if err := os.WriteFile(configPath, []byte("[idle]\nrespect_inhibitors = false\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.NewConfig()
+	if err := cfg.LoadFromFile(configPath); err != nil {
+		t.Fatal(err)
+	}
+
+	var gotRespect bool
+	original := newWaylandDetector
+	newWaylandDetector = func(_ time.Duration, respect bool, _, _ func()) (waylandDetector, error) {
+		gotRespect = respect
+		return &stubWaylandDetector{}, nil
+	}
+	t.Cleanup(func() { newWaylandDetector = original })
+
+	detector := NewIdleDetector(cfg)
+	ctx, cancel := context.WithCancel(context.Background())
+	if err := detector.startWaylandIdleDetection(ctx); err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	cancel()
+	if gotRespect {
+		t.Fatal("Wayland detector received respect_inhibitors=true, want false")
+	}
+}
+
 // TestIdleDetector_Events tests event channel access
 func TestIdleDetector_Events(t *testing.T) {
 	cfg := config.NewConfig()
@@ -425,7 +455,7 @@ func TestStartWaylandIdleDetection_FallsBackWhenDetectorFails(t *testing.T) {
 			var stub *stubWaylandDetector
 
 			original := newWaylandDetector
-			newWaylandDetector = func(time.Duration, func(), func()) (waylandDetector, error) {
+			newWaylandDetector = func(time.Duration, bool, func(), func()) (waylandDetector, error) {
 				detector, err := tt.constructor()
 				if d, ok := detector.(*stubWaylandDetector); ok {
 					stub = d
@@ -478,7 +508,7 @@ func TestStartWaylandIdleDetection_FallsBackWhenDetectorFails(t *testing.T) {
 // timer, or inert — both better than a screensaver over live work.
 func TestStartWaylandIdleDetection_DoesNotClaimX11InWaylandSession(t *testing.T) {
 	original := newWaylandDetector
-	newWaylandDetector = func(time.Duration, func(), func()) (waylandDetector, error) {
+	newWaylandDetector = func(time.Duration, bool, func(), func()) (waylandDetector, error) {
 		return nil, errors.New("no ext-idle-notifier-v1")
 	}
 	t.Cleanup(func() { newWaylandDetector = original })

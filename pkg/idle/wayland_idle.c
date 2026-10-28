@@ -11,6 +11,7 @@
 static struct wl_display *display = NULL;
 static struct wl_registry *registry = NULL;
 static struct ext_idle_notifier_v1 *idle_notifier = NULL;
+static uint32_t idle_notifier_version = 0;
 static struct wl_seat *seat = NULL;
 static struct ext_idle_notification_v1 *notification = NULL;
 
@@ -40,8 +41,9 @@ static const struct ext_idle_notification_v1_listener idle_notification_listener
 static void registry_handle_global(void *data, struct wl_registry *registry,
 uint32_t name, const char *interface, uint32_t version) {
 if (strcmp(interface, ext_idle_notifier_v1_interface.name) == 0) {
-idle_notifier = wl_registry_bind(registry, name, 
-&ext_idle_notifier_v1_interface, 1);
+idle_notifier_version = version > 2 ? 2 : version;
+idle_notifier = wl_registry_bind(registry, name,
+&ext_idle_notifier_v1_interface, idle_notifier_version);
 } else if (strcmp(interface, "wl_seat") == 0 && seat == NULL) {
 seat = wl_registry_bind(registry, name, &wl_seat_interface, 1);
 }
@@ -57,6 +59,7 @@ static const struct wl_registry_listener registry_listener = {
 
 // API functions
 int wayland_cgo_init() {
+idle_notifier_version = 0;
 display = wl_display_connect(NULL);
 if (!display) {
 return -1;
@@ -86,13 +89,22 @@ return -4;
 return 0;
 }
 
-int wayland_cgo_register_timeout(uint32_t timeout_ms) {
+uint32_t wayland_cgo_idle_notifier_version() {
+	return idle_notifier_version;
+}
+
+int wayland_cgo_register_timeout(uint32_t timeout_ms, int input_only) {
 if (!idle_notifier || !seat) {
 return -1;
 }
 
+if (input_only) {
+notification = ext_idle_notifier_v1_get_input_idle_notification(
+idle_notifier, timeout_ms, seat);
+} else {
 notification = ext_idle_notifier_v1_get_idle_notification(
 idle_notifier, timeout_ms, seat);
+}
 
 if (!notification) {
 return -2;
@@ -169,4 +181,5 @@ if (display) {
 wl_display_disconnect(display);
 display = NULL;
 }
+idle_notifier_version = 0;
 }

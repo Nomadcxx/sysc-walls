@@ -867,6 +867,12 @@ timeout = 5m
 #               Default: 30s
 min_duration = 30s
 
+# respect_inhibitors: Wait for active applications to release idle inhibitors
+#                     Set false to ignore inhibitors (requires ext-idle-notify v2)
+#                     Version 1 compositors warn and keep respecting inhibitors
+#                     Default: true
+respect_inhibitors = true
+
 [daemon]
 # debug: Enable debug logging to stderr
 #        Set to true to troubleshoot issues

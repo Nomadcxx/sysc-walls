@@ -20,13 +20,14 @@ import (
 
 // IdleDetector handles system idle detection
 type IdleDetector struct {
-	config      *config.Config
-	mu          sync.Mutex
-	lastActive  time.Time
-	idleTimeout time.Duration
-	idleChan    chan struct{}
-	resumeChan  chan struct{}
-	nativeIdle  string
+	config            *config.Config
+	mu                sync.Mutex
+	lastActive        time.Time
+	idleTimeout       time.Duration
+	respectInhibitors bool
+	idleChan          chan struct{}
+	resumeChan        chan struct{}
+	nativeIdle        string
 
 	// lostChan is signalled when the native Wayland event loop ends
 	// unexpectedly. The caller has to re-evaluate its idle source when that
@@ -67,12 +68,13 @@ type Events struct {
 // NewIdleDetector creates a new idle detector
 func NewIdleDetector(cfg *config.Config) *IdleDetector {
 	return &IdleDetector{
-		config:      cfg,
-		idleTimeout: cfg.GetIdleTimeout(),
-		idleChan:    make(chan struct{}, 10), // Larger buffer to prevent drops
-		resumeChan:  make(chan struct{}, 10), // Larger buffer to prevent drops
-		lastActive:  time.Now(),
-		lostChan:    make(chan struct{}, 1),
+		config:            cfg,
+		idleTimeout:       cfg.GetIdleTimeout(),
+		respectInhibitors: cfg.GetRespectInhibitors(),
+		idleChan:          make(chan struct{}, 10), // Larger buffer to prevent drops
+		resumeChan:        make(chan struct{}, 10), // Larger buffer to prevent drops
+		lastActive:        time.Now(),
+		lostChan:          make(chan struct{}, 1),
 	}
 }
 
@@ -217,8 +219,8 @@ type waylandDetector interface {
 
 // newWaylandDetector builds the detector for the Wayland path. Tests replace it
 // to reach the failure paths, which need no compositor.
-var newWaylandDetector = func(timeout time.Duration, onIdle, onResume func()) (waylandDetector, error) {
-	return NewWaylandCGODetector(timeout, onIdle, onResume)
+var newWaylandDetector = func(timeout time.Duration, respectInhibitors bool, onIdle, onResume func()) (waylandDetector, error) {
+	return newWaylandCGODetector(timeout, respectInhibitors, onIdle, onResume)
 }
 
 // startWaylandIdleDetection starts native Wayland idle detection using ext-idle-notify-v1
@@ -266,7 +268,7 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 		}
 	}
 
-	detector, err := newWaylandDetector(d.idleTimeout, onIdle, onResume)
+	detector, err := newWaylandDetector(d.idleTimeout, d.respectInhibitors, onIdle, onResume)
 	if err != nil {
 		log.Printf("Failed to create Wayland CGO detector: %v", err)
 		log.Println("Falling back to X11 detection if available")

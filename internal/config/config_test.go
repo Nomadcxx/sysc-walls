@@ -122,7 +122,7 @@ func TestFormatDuration(t *testing.T) {
 		{5 * time.Minute, "5m"},
 		{3600 * time.Second, "1h"},
 		{2 * time.Hour, "2h"},
-		{90 * time.Second, "1m"}, // 90s rounds to 1m
+		{90 * time.Second, "90s"},
 	}
 
 	for _, tt := range tests {
@@ -130,6 +130,76 @@ func TestFormatDuration(t *testing.T) {
 			result := formatDuration(tt.input)
 			if result != tt.expected {
 				t.Errorf("formatDuration(%v) = %s, want %s", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFormatDurationRoundTripsWholeSeconds(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    time.Duration
+		expected string
+	}{
+		{"90s", 90 * time.Second, "90s"},
+		{"150s", 150 * time.Second, "150s"},
+		{"65s", 65 * time.Second, "65s"},
+		{"90m", 90 * time.Minute, "90m"},
+		{"1h30m", time.Hour + 30*time.Minute, "90m"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			formatted := formatDuration(tt.input)
+			if formatted != tt.expected {
+				t.Fatalf("formatDuration(%v) = %q, want %q", tt.input, formatted, tt.expected)
+			}
+			parsed, err := parseDuration(formatted)
+			if err != nil {
+				t.Fatalf("parseDuration(%q) error = %v", formatted, err)
+			}
+			if parsed != tt.input {
+				t.Fatalf("parseDuration(formatDuration(%v)) = %v, want %v", tt.input, parsed, tt.input)
+			}
+		})
+	}
+}
+
+func TestSaveToFileRoundTripsIdleTimeoutPrecision(t *testing.T) {
+	isolateShellTheme(t)
+	tests := []struct {
+		input string
+		want  time.Duration
+	}{
+		{"90s", 90 * time.Second},
+		{"150s", 150 * time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			cfg := NewConfig()
+			if err := cfg.SetIdleTimeout(tt.input); err != nil {
+				t.Fatalf("SetIdleTimeout(%q) error = %v", tt.input, err)
+			}
+			configPath := filepath.Join(t.TempDir(), "daemon.conf")
+			if err := cfg.SaveToFile(configPath); err != nil {
+				t.Fatalf("SaveToFile() error = %v", err)
+			}
+
+			saved, err := os.ReadFile(configPath)
+			if err != nil {
+				t.Fatalf("ReadFile() error = %v", err)
+			}
+			if !strings.Contains(string(saved), "timeout = "+tt.input+"\n") {
+				t.Fatalf("saved timeout did not retain %q:\n%s", tt.input, saved)
+			}
+
+			loaded := NewConfig()
+			if err := loaded.LoadFromFile(configPath); err != nil {
+				t.Fatalf("LoadFromFile() error = %v", err)
+			}
+			if got := loaded.GetIdleTimeout(); got != tt.want {
+				t.Fatalf("idle timeout after save+load = %v, want %v", got, tt.want)
 			}
 		})
 	}

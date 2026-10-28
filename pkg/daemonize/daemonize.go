@@ -141,14 +141,18 @@ func (d *Daemon) CleanupPidFile() error {
 	return d.removePidFile()
 }
 
-// createPidFile creates a PID file with the current process ID
-func (d *Daemon) createPidFile() error {
-	// Determine PID file location - use user runtime directory
+func (d *Daemon) runtimePidFilePath() string {
 	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
 	if runtimeDir == "" {
 		runtimeDir = fmt.Sprintf("/run/user/%d", os.Getuid())
 	}
-	d.pidFile = filepath.Join(runtimeDir, fmt.Sprintf("%s.pid", d.name))
+	return filepath.Join(runtimeDir, fmt.Sprintf("%s.pid", d.name))
+}
+
+// createPidFile creates a PID file with the current process ID
+func (d *Daemon) createPidFile() error {
+	d.pidFile = d.runtimePidFilePath()
+	runtimeDir := filepath.Dir(d.pidFile)
 
 	// /run/user/<uid> is created by logind, not by us, and XDG_RUNTIME_DIR may
 	// point somewhere that has not been made yet. Without this the failure
@@ -225,6 +229,10 @@ func isProcessRunning(pid int) bool {
 
 // Stop stops the daemon process
 func (d *Daemon) Stop() error {
+	if d.pidFile == "" {
+		d.pidFile = d.runtimePidFilePath()
+	}
+
 	// Check if PID file exists
 	if _, err := os.Stat(d.pidFile); os.IsNotExist(err) {
 		return fmt.Errorf("PID file not found, daemon may not be running")

@@ -197,6 +197,23 @@ func TestIsSameExecutableIsNotCheckableForAMissingProcess(t *testing.T) {
 	}
 }
 
+func TestStopResolvesPIDFileForNewDaemon(t *testing.T) {
+	runtimeDir := withRuntimeDir(t)
+	pidPath := filepath.Join(runtimeDir, "test-stop-default.pid")
+	if err := os.WriteFile(pidPath, []byte("not-a-pid"), 0644); err != nil {
+		t.Fatalf("seeding PID file: %v", err)
+	}
+
+	d := NewDaemon("test-stop-default")
+	err := d.Stop()
+	if err == nil || !strings.Contains(err.Error(), "invalid PID in file") {
+		t.Fatalf("Stop() error = %v, want invalid PID error from the default PID file", err)
+	}
+	if d.PidFile() != pidPath {
+		t.Errorf("PidFile() = %q, want %q", d.PidFile(), pidPath)
+	}
+}
+
 // TestStopRefusesAnUnrelatedPID is the user-visible consequence: a recycled PID
 // must not be signalled.
 func TestStopRefusesAnUnrelatedPID(t *testing.T) {

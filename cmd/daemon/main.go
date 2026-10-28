@@ -210,8 +210,11 @@ func main() {
 
 	if *stop {
 		fmt.Println("Stopping sysc-walls daemon...")
-		daemon.StopScreensaver()
+		stopErr := daemonize.NewDaemon("sysc-walls-daemon").Stop()
 		daemon.Shutdown()
+		if stopErr != nil {
+			log.Fatalf("Failed to stop daemon: %v", stopErr)
+		}
 		return
 	}
 

@@ -173,7 +173,7 @@ The gallery lists the remaining effects newest to oldest. Text effects read ASCI
 
 `dracula`, `catppuccin`, `catppuccin-mocha`, `nord`, `tokyo-night` (`tokyonight`), `gruvbox`, `material`, `solarized`, `monochrome`, `transishardjob`, `rama`, `eldritch`, `dark`, `ayu`, `amber`, `blue`, `purple`, `green`, `orange`, `rose-pine`, `kanagawa`, `noctalia`, `eldritch-abyss`, `void`, `red`, `cyan`, `coral`, `pink`
 
-For custom ASCII art, use [syscgo-tui](https://github.com/Nomadcxx/sysc-Go) to create and export text files. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for setup.
+For custom ASCII art, use [syscgo-tui](https://github.com/Nomadcxx/sysc-Go) to create and export text files, or [sysclet](https://github.com/Nomadcxx/sysclet) to render text with TheDraw fonts and point `daemon.conf` at it. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for setup.
 
 ## Configuration
 
@@ -342,6 +342,7 @@ Have a feature request? Open an issue on [GitHub](https://github.com/Nomadcxx/sy
 
 - **[sysc-Go](https://github.com/Nomadcxx/sysc-Go)** - Terminal animation library that powers sysc-walls effects. Includes CLI tools and interactive TUI for creating ASCII art.
 - **[sysc-greet](https://github.com/Nomadcxx/sysc-greet)** - Console greeter for greetd with sysc-Go animations and video wallpapers
+- **[sysclet](https://github.com/Nomadcxx/sysclet)** - Text headers from TheDraw fonts, exported to sysc-walls, sysc-greet and sysc-terminal
 - **[moonbit](https://github.com/Nomadcxx/moonbit)** - Modern system cleaner with TUI for reclaiming disk space
 
 ## Acknowledgements

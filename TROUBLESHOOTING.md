@@ -32,7 +32,20 @@ The installer copies all ASCII art files from sysc-Go to this directory. Text-ba
 
 ## Creating Custom ASCII Art
 
-Text effects such as `matrix-art`, `rain-art`, `fire-text`, `beam-text`, `ring-text`, `blackhole`, `decrypt`, `pour`, and `print` can display custom ASCII art. You can create your own art using the sysc-Go TUI tool or manually.
+Text effects such as `matrix-art`, `rain-art`, `fire-text`, `beam-text`, `ring-text`, `blackhole`, `decrypt`, `pour`, and `print` can display custom ASCII art. You can create your own art using sysclet, the sysc-Go TUI tool or manually.
+
+### Using sysclet
+
+[sysclet](https://github.com/Nomadcxx/sysclet) renders text with TheDraw fonts and exports it as plain UTF-8 text for sysc-walls:
+
+```bash
+sysclet export --font-name Bleach --format sysc-walls --output sysc SYSC
+systemctl --user restart sysc-walls.service
+```
+
+A bare `--output` name such as `sysc` writes `~/.local/share/syscgo/walls/sysc.txt`. Any other path must resolve under `~/.local/share` or `~/.config`.
+
+sysclet then sets `effect = beam-text`, `theme = dracula`, `file` and `cycle = false` in the `[animation]` section of `~/.config/sysc-walls/daemon.conf`. It keeps the other lines and saves the original beside it as `daemon.conf.sysclet-<timestamp>.bak`. If `daemon.conf` is a symlink, sysclet edits its target. The daemon reads `daemon.conf` only at start, so restart the service. With `follow_shell = true`, the default, the sysc-shell theme replaces `dracula` while sysc-shell has one selected.
 
 ### Using the sysc-Go ASCII Creator TUI
 

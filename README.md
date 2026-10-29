@@ -173,7 +173,7 @@ The gallery lists the remaining effects newest to oldest. Text effects read ASCI
 
 `dracula`, `catppuccin`, `catppuccin-mocha`, `nord`, `tokyo-night` (`tokyonight`), `gruvbox`, `material`, `solarized`, `monochrome`, `transishardjob`, `rama`, `eldritch`, `dark`, `ayu`, `amber`, `blue`, `purple`, `green`, `orange`, `rose-pine`, `kanagawa`, `noctalia`, `eldritch-abyss`, `void`, `red`, `cyan`, `coral`, `pink`
 
-For custom ASCII art, use [syscgo-tui](https://github.com/Nomadcxx/sysc-Go) to create and export text files, or [sysclet](https://github.com/Nomadcxx/sysclet) to render text with TheDraw fonts and point `daemon.conf` at it. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for setup.
+For custom ASCII art, use [sysclet](https://github.com/Nomadcxx/sysclet) to render text with TheDraw fonts and point `daemon.conf` at it, or write plain text in any editor. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for setup.
 
 ## Configuration
 

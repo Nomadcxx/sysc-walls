@@ -43,7 +43,11 @@ sysclet export --format sysc-walls \
   --font-name Bleach --output "$HOME/.config/sysc-walls/ascii/myart" SYSC
 ```
 
-sysclet writes plain text as `myart.txt`, points the daemon config at it, and sets the effect to `beam-text` with the `dracula` theme. Restart the service to apply it:
+sysclet writes plain text as `myart.txt`, points the daemon config at it, and sets the effect to `beam-text` with the `dracula` theme. A bare `--output` name such as `myart` writes `~/.local/share/syscgo/walls/myart.txt` instead; any other path must resolve under `~/.local/share` or `~/.config`.
+
+In `~/.config/sysc-walls/daemon.conf`, sysclet sets `effect`, `theme`, `file` and `cycle = false` under `[animation]` and keeps every other line. It saves the original beside it as `daemon.conf.sysclet-<timestamp>.bak`, edits the target when `daemon.conf` is a symlink, and creates the file when it is missing. `follow_shell` stays as it was: with `follow_shell = true`, the default, sysc-walls keeps using the sysc-shell theme while sysc-shell has one selected, and uses `dracula` otherwise.
+
+The daemon reads `daemon.conf` only at start. Restart the service to apply it:
 
 ```sh
 systemctl --user restart sysc-walls.service

@@ -32,63 +32,22 @@ The installer copies all ASCII art files from sysc-Go to this directory. Text-ba
 
 ## Creating Custom ASCII Art
 
-Text effects such as `matrix-art`, `rain-art`, `fire-text`, `beam-text`, `ring-text`, `blackhole`, `decrypt`, `pour`, and `print` can display custom ASCII art. You can create your own art using the sysc-Go TUI tool or manually.
+Text effects such as `matrix-art`, `rain-art`, `fire-text`, `beam-text`, `ring-text`, `blackhole`, `decrypt`, `pour`, and `print` display plain-text artwork. Use sysclet to create a font-based header, or make artwork in any text editor.
 
-### Using the sysc-Go ASCII Creator TUI
+### Export a header with sysclet
 
-The sysc-Go library includes an interactive TUI for creating and previewing ASCII art:
+Install [sysclet v0.3.0 or later](https://github.com/Nomadcxx/sysclet/releases), then export a header:
 
-**Install sysc-Go (one-line):**
-```bash
-curl -fsSL https://raw.githubusercontent.com/Nomadcxx/sysc-Go/master/install.sh | bash
+```sh
+sysclet export --format sysc-walls \
+  --font-name Bleach --output "$HOME/.config/sysc-walls/ascii/myart" SYSC
 ```
 
-**Or build manually:**
-```bash
-git clone https://github.com/Nomadcxx/sysc-Go.git
-cd sysc-Go
-go build -o syscgo ./cmd/syscgo/
-./syscgo
+sysclet writes plain text as `myart.txt`, points the daemon config at it, and sets the effect to `beam-text` with the `dracula` theme. Restart the service to apply it:
+
+```sh
+systemctl --user restart sysc-walls.service
 ```
-
-**TUI Features:**
-- **Live preview** - See your ASCII art with matrix-art, rain-art, or other text effects in real-time
-- **Theme selection** - Test different color palettes
-- **Animation preview** - Watch how the effect animates with your text
-- **Built-in editor** - Create ASCII art directly in the terminal
-- **File browser** - Load existing .txt files from assets directory
-- **Export options** - Save to sysc-Go assets or sysc-walls config directory
-
-**Workflow:**
-
-1. **Start the TUI:**
-   ```bash
-   ./syscgo-tui
-   ```
-
-2. **Choose creation method:**
-   - Select "Custom text" to open the built-in editor
-   - Or select an existing .txt file as a starting point
-
-3. **Create your ASCII art:**
-   - Type or paste ASCII art in the editor
-   - Use the preview pane to see it animated in real-time
-   - Test different effects (matrix-art, rain-art) and themes
-
-4. **Save your creation:**
-   - Press the export key (shown in help bar)
-   - Choose export target:
-     - **sysc-walls config** - Saves to `~/.config/sysc-walls/ascii/` (for immediate use with sysc-walls daemon)
-     - **sysc-Go assets** - Saves to `~/.local/share/syscgo/assets/` (for use with standalone sysc-Go)
-   - Enter a filename (e.g., `myart.txt`)
-
-5. **Use your ASCII art:**
-   - If exported to sysc-walls config, it's ready to use
-   - Reinstall sysc-walls to pick up the new file:
-     ```bash
-     cd sysc-walls
-     go run cmd/installer/main.go
-     ```
 
 ### Manual ASCII Art Creation
 
@@ -142,22 +101,11 @@ Once you have your ASCII art file in `~/.config/sysc-walls/ascii/`:
 
 **For use with the daemon:**
 
-The daemon currently uses `SYSC.txt` by default for all text-based effects. To use a different file:
+The daemon uses `SYSC.txt` by default. For a manually created file, set `file = /path/to/myart.txt` under `[animation]` in `daemon.conf`, or replace `SYSC.txt`. Restart the service after changing the file or config:
 
-1. Rename your file to `SYSC.txt`:
-   ```bash
-   mv ~/.config/sysc-walls/ascii/myart.txt ~/.config/sysc-walls/ascii/SYSC.txt
-   ```
-
-2. Or keep the original and create a symlink:
-   ```bash
-   ln -sf ~/.config/sysc-walls/ascii/myart.txt ~/.config/sysc-walls/ascii/SYSC.txt
-   ```
-
-3. Restart the daemon:
-   ```bash
-   systemctl --user restart sysc-walls.service
-   ```
+```sh
+systemctl --user restart sysc-walls.service
+```
 
 ### ASCII Art Resources
 

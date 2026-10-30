@@ -826,28 +826,62 @@ func updateConfig(m *model) error {
 		}
 	}
 
-	// Copy bundled ASCII art files to user config directory
+	// Install bundled ASCII art only when the user does not already have a file.
 	asciiSourceDir := "assets/ascii"
-	if info, err := os.Stat(asciiSourceDir); err == nil && info.IsDir() {
-		entries, err := os.ReadDir(asciiSourceDir)
-		if err == nil {
-			for _, entry := range entries {
-				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".txt") {
-					srcPath := filepath.Join(asciiSourceDir, entry.Name())
-					dstPath := filepath.Join(asciiDir, entry.Name())
+	entries, err := os.ReadDir(asciiSourceDir)
+	if err != nil {
+		return fmt.Errorf("failed to read bundled ASCII art directory %s: %w", asciiSourceDir, err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".txt") {
+			continue
+		}
 
-					// Copy file
-					srcData, err := os.ReadFile(srcPath)
-					if err == nil {
-						if err := os.WriteFile(dstPath, srcData, 0644); err == nil {
-							// Set proper ownership
-							if sudoUser != "" && uid > 0 {
-								os.Chown(dstPath, uid, gid)
-							}
-						}
-					}
+		srcPath := filepath.Join(asciiSourceDir, entry.Name())
+		dstPath := filepath.Join(asciiDir, entry.Name())
+		srcData, err := os.ReadFile(srcPath)
+		if err != nil {
+			return fmt.Errorf("failed to read bundled ASCII art %s: %w", srcPath, err)
+		}
+
+		// O_EXCL keeps existing files and does not follow a dangling symlink.
+		dstFile, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err != nil {
+			if os.IsExist(err) {
+				if info, statErr := os.Lstat(dstPath); statErr == nil && !info.Mode().IsRegular() {
+					fmt.Fprintf(os.Stderr, "warning: skipping non-regular ASCII art path %s\n", dstPath)
 				}
+				continue
 			}
+			return fmt.Errorf("failed to create ASCII art file %s: %w", dstPath, err)
+		}
+
+		createdInfo, err := dstFile.Stat()
+		if err != nil {
+			dstFile.Close()
+			return fmt.Errorf("failed to inspect new ASCII art file %s: %w", dstPath, err)
+		}
+		removeCreatedFile := func() {
+			if info, statErr := os.Lstat(dstPath); statErr == nil && os.SameFile(createdInfo, info) {
+				_ = os.Remove(dstPath)
+			}
+		}
+
+		if _, err := dstFile.Write(srcData); err != nil {
+			removeCreatedFile()
+			dstFile.Close()
+			return fmt.Errorf("failed to write ASCII art file %s: %w", dstPath, err)
+		}
+		if sudoUser != "" && uid > 0 {
+			if err := dstFile.Chown(uid, gid); err != nil {
+				removeCreatedFile()
+				dstFile.Close()
+				return fmt.Errorf("failed to set ownership on ASCII art file %s: %w", dstPath, err)
+			}
+		}
+		if err := dstFile.Close(); err != nil {
+			removeCreatedFile()
+			return fmt.Errorf("failed to close ASCII art file %s: %w", dstPath, err)
 		}
 	}
 

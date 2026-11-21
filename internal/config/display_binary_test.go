@@ -97,3 +97,26 @@ func writeExecutable(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 }
+
+// A file named sysc-walls-display in the working directory must never be
+// chosen: the daemon starts in the home directory and runs this lookup at
+// every idle event (audit sysc-2366).
+func TestFindDisplayBinaryIgnoresTheWorkingDirectory(t *testing.T) {
+	cwd := t.TempDir()
+	writeExecutable(t, filepath.Join(cwd, "sysc-walls-display"))
+	t.Chdir(cwd)
+	t.Setenv("PATH", "")
+	saved := systemDisplayLocations
+	for _, loc := range saved {
+		if !filepath.IsAbs(loc) {
+			t.Fatalf("system display location %q is relative to the working directory", loc)
+		}
+	}
+	systemDisplayLocations = []string{filepath.Join(t.TempDir(), "absent")}
+	t.Cleanup(func() { systemDisplayLocations = saved })
+
+	got, err := findDisplayBinary("", t.TempDir())
+	if err == nil && (!filepath.IsAbs(got) || filepath.Dir(got) == cwd) {
+		t.Fatalf("findDisplayBinary() = %q, a binary from the working directory", got)
+	}
+}

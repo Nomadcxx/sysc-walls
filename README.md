@@ -88,6 +88,8 @@ cd sysc-walls
 sudo go run cmd/installer/main.go
 ```
 
+The installer builds as root from the checkout it runs in, so it refuses a checkout that another account could change (a shared, group- or world-writable directory). Clone somewhere only you can write, such as your home directory.
+
 The installer automatically:
 - Downloads sysc-Go as a Go module dependency (no clone needed)
 - Builds all binaries (daemon, display, client)

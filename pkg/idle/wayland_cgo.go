@@ -44,6 +44,7 @@ type WaylandCGODetector struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
 	mu          sync.Mutex
+	loopDone    chan struct{} // closed when the event loop has returned; nil before Start
 	initialized atomic.Bool
 	onLost      func()
 }
@@ -159,8 +160,16 @@ func (w *WaylandCGODetector) Start() error {
 
 	log.Printf("Using Wayland FD: %d for polling", fd)
 
+	done := make(chan struct{})
+	w.mu.Lock()
+	w.loopDone = done
+	w.mu.Unlock()
+
 	// Run event loop in goroutine with proper polling
 	go func() {
+		// Deferred first, so it runs last: Stop waits on it before freeing
+		// the display the loop polls and dispatches on.
+		defer close(done)
 		log.Println("Starting Wayland CGO event loop")
 		lastHeartbeat := time.Now()
 		pollCount := 0
@@ -238,9 +247,21 @@ func (w *WaylandCGODetector) Start() error {
 
 func (w *WaylandCGODetector) Stop() {
 	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	w.cancel()
+	done := w.loopDone
+	w.loopDone = nil
+	w.mu.Unlock()
+
+	// The loop may be inside poll or a libwayland read or dispatch on the
+	// display; disconnecting it there is a use-after-free (audit sysc-2367).
+	// It sees the cancel within one 100 ms poll. The lock is not held while
+	// waiting, because the loop's exit path takes it to report a loss.
+	if done != nil {
+		<-done
+	}
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
 
 	if w.initialized.Load() {
 		C.wayland_cgo_cleanup()

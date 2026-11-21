@@ -45,6 +45,7 @@ type WaylandCGODetector struct {
 	cancel      context.CancelFunc
 	mu          sync.Mutex
 	loopDone    chan struct{} // closed when the event loop has returned; nil before Start
+	stopOnce    sync.Once
 	initialized atomic.Bool
 	onLost      func()
 }
@@ -52,6 +53,12 @@ type WaylandCGODetector struct {
 // Global instance for CGO callbacks
 var globalDetector *WaylandCGODetector
 var globalDetectorMu sync.Mutex
+
+// cState serialises setting up and tearing down the Wayland state, which is
+// process-wide in wayland_idle.c: a new detector must not initialise it while
+// an earlier Stop is still waiting to free it, or the late cleanup destroys
+// the new connection.
+var cState sync.Mutex
 
 // SetOnLost registers a callback for the event loop ending unexpectedly.
 //
@@ -110,6 +117,9 @@ func newWaylandCGODetector(timeout time.Duration, respectInhibitors bool, onIdle
 		ctx:      ctx,
 		cancel:   cancel,
 	}
+
+	cState.Lock()
+	defer cState.Unlock()
 
 	// Set global instance for CGO callbacks
 	globalDetectorMu.Lock()
@@ -245,11 +255,19 @@ func (w *WaylandCGODetector) Start() error {
 	return nil
 }
 
+// Stop ends the event loop and frees the Wayland state. It runs once; a
+// concurrent or later call waits for that one to finish.
 func (w *WaylandCGODetector) Stop() {
+	w.stopOnce.Do(w.stop)
+}
+
+func (w *WaylandCGODetector) stop() {
+	cState.Lock()
+	defer cState.Unlock()
+
 	w.mu.Lock()
 	w.cancel()
 	done := w.loopDone
-	w.loopDone = nil
 	w.mu.Unlock()
 
 	// The loop may be inside poll or a libwayland read or dispatch on the
@@ -268,9 +286,10 @@ func (w *WaylandCGODetector) Stop() {
 		w.initialized.Store(false)
 	}
 
-	// Clear global detector
 	globalDetectorMu.Lock()
-	globalDetector = nil
+	if globalDetector == w {
+		globalDetector = nil
+	}
 	globalDetectorMu.Unlock()
 }
 

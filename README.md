@@ -85,10 +85,11 @@ Or **manual install:**
 ```bash
 git clone https://github.com/Nomadcxx/sysc-walls.git
 cd sysc-walls
-sudo go run cmd/installer/main.go
+go build -o install-sysc-walls ./cmd/installer/
+sudo ./install-sysc-walls
 ```
 
-The installer builds as root from the checkout it runs in, so it refuses a checkout that another account could change (a shared, group- or world-writable directory). Clone somewhere only you can write, such as your home directory.
+Build the installer as yourself, then run it with sudo; `sudo go run` would compile the installer as root before it could check anything. The installer builds the components as root from the checkout it runs in, so it refuses a checkout that another account could change (a shared, group- or world-writable directory). Clone somewhere only you can write, such as your home directory.
 
 The installer automatically:
 - Downloads sysc-Go as a Go module dependency (no clone needed)
@@ -238,7 +239,8 @@ For detailed configuration options and troubleshooting, see [TROUBLESHOOTING.md]
 ```bash
 git clone https://github.com/Nomadcxx/sysc-walls.git
 cd sysc-walls
-sudo go run cmd/installer/main.go
+go build -o install-sysc-walls ./cmd/installer/
+sudo ./install-sysc-walls
 ```
 
 **Manual build:**

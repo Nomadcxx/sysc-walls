@@ -115,8 +115,7 @@ func TestFindDisplayBinaryIgnoresTheWorkingDirectory(t *testing.T) {
 	systemDisplayLocations = []string{filepath.Join(t.TempDir(), "absent")}
 	t.Cleanup(func() { systemDisplayLocations = saved })
 
-	got, err := findDisplayBinary("", t.TempDir())
-	if err == nil && (!filepath.IsAbs(got) || filepath.Dir(got) == cwd) {
+	if got, err := findDisplayBinary("", t.TempDir()); err == nil {
 		t.Fatalf("findDisplayBinary() = %q, a binary from the working directory", got)
 	}
 }

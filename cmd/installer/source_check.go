@@ -67,7 +67,16 @@ func checkSourceEntry(path string, info fs.FileInfo, uid, gid int, ancestor bool
 		return fmt.Errorf("%s belongs to another account (uid %d); build from a checkout you own", path, st.Uid)
 	}
 	if info.Mode()&fs.ModeSymlink != 0 {
-		return nil // a symlink's own mode bits mean nothing
+		// A symlink's own mode bits mean nothing; the build reads its target.
+		target, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return err
+		}
+		tinfo, err := os.Stat(target)
+		if err != nil {
+			return err
+		}
+		return checkSourceEntry(target, tinfo, uid, gid, false)
 	}
 	perm := info.Mode().Perm()
 	if perm&0o002 != 0 && !(ancestor && st.Uid == 0 && info.Mode()&fs.ModeSticky != 0) {

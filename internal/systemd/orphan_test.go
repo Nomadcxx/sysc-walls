@@ -156,7 +156,7 @@ func TestIsScreensaverArgv(t *testing.T) {
 	}{
 		{[]string{"kitty", "--start-as=fullscreen", "--class", "sysc-walls-screensaver", "/usr/local/bin/sysc-walls-display"}, true},
 		{[]string{"/usr/bin/kitty", "--class=sysc-walls-screensaver", "x"}, true},
-		{[]string{"xterm", "--class", "sysc-walls-screensaver", "x"}, true},
+		{[]string{"xterm", "--class", "sysc-walls-screensaver", "x"}, false},
 		{[]string{"kitty", "--class", "my-regular-term", "x"}, false},
 		{[]string{"kitty", "--class"}, false},
 		{[]string{"grep", "kitty.*--class.*sysc-walls-screensaver"}, false},

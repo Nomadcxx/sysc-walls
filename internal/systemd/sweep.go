@@ -21,10 +21,8 @@ func isScreensaverArgv(argv []string) bool {
 	if len(argv) < 3 {
 		return false
 	}
-	switch filepath.Base(argv[0]) {
-	case "kitty", "xterm":
-	default:
-		return false
+	if filepath.Base(argv[0]) != "kitty" {
+		return false // the only launcher that takes --class
 	}
 	for i, arg := range argv[1:] {
 		if arg == "--class="+screensaverClass {

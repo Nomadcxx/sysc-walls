@@ -62,6 +62,22 @@ func TestCheckSourceTree(t *testing.T) {
 		}
 	}
 
+	// A symlink in the tree is judged by what the build would read through it.
+	shared := filepath.Join(t.TempDir(), "shared.go")
+	if err := os.WriteFile(shared, []byte("package main\n"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(shared, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	linked := writeTree(t)
+	if err := os.Symlink(shared, filepath.Join(linked, "cmd", "daemon", "extra.go")); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkSourceTree(linked, uid, gid); err == nil || !strings.Contains(err.Error(), "every account") {
+		t.Errorf("symlink to a world-writable file: err = %v", err)
+	}
+
 	// The user's own group may write, as with a private group and umask 002.
 	dir := writeTree(t)
 	if err := os.Chmod(filepath.Join(dir, "cmd", "daemon"), 0o775); err != nil {

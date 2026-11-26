@@ -59,6 +59,20 @@ type Daemon struct {
 	// Atomic because the signal handler calls onActivity concurrently with Run.
 	// See configureFallbackTimer.
 	useFallbackTimer atomic.Bool
+
+	// screensaverStarted is the wall-clock time of the last launch, stored as
+	// UnixNano. onActivity uses it to honour idle.min_duration.
+	screensaverStarted atomic.Int64
+
+	// dismissMu guards the single deferred-dismissal timer. onActivity can run
+	// from the signal goroutine and the event loop at once.
+	dismissMu         sync.Mutex
+	dismissTimer      *time.Timer
+	dismissGeneration uint64
+
+	// stopMu serialises StopScreensaver calls from the event loop, the signal
+	// handler, and a deferred dismissal timer.
+	stopMu sync.Mutex
 }
 
 // NewDaemon creates a new daemon instance
@@ -315,7 +329,72 @@ func (d *Daemon) onActivity() {
 	}
 
 	d.resetIdleTimer()
-	d.StopScreensaver()
+	d.dismissScreensaver()
+}
+
+// dismissScreensaver stops the screensaver once idle.min_duration has passed.
+// A resume before that only schedules the dismissal; it does not tear down a
+// saver the user has not been able to see yet.
+func (d *Daemon) dismissScreensaver() {
+	if !d.systemD.IsRunning() {
+		// Keep the old sweep behaviour: StopScreensaver looks for untracked
+		// instances even when this daemon is not tracking one.
+		d.StopScreensaver()
+		return
+	}
+	remaining := d.minimumRunRemaining(time.Now())
+	if remaining <= 0 {
+		d.cancelScheduledDismissal()
+		d.StopScreensaver()
+		return
+	}
+	d.scheduleDismissal(remaining)
+}
+
+// minimumRunRemaining returns how long the current screensaver still has to
+// stay up before idle.min_duration is satisfied.
+func (d *Daemon) minimumRunRemaining(now time.Time) time.Duration {
+	started := d.screensaverStarted.Load()
+	if started == 0 {
+		return 0
+	}
+	remaining := d.config.GetMinDuration() - now.Sub(time.Unix(0, started))
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
+}
+
+func (d *Daemon) scheduleDismissal(remaining time.Duration) {
+	d.dismissMu.Lock()
+	defer d.dismissMu.Unlock()
+
+	d.dismissGeneration++
+	generation := d.dismissGeneration
+	if d.dismissTimer != nil {
+		d.dismissTimer.Stop()
+	}
+	d.dismissTimer = time.AfterFunc(remaining, func() {
+		d.dismissMu.Lock()
+		if d.dismissGeneration != generation {
+			d.dismissMu.Unlock()
+			return
+		}
+		d.dismissTimer = nil
+		d.dismissMu.Unlock()
+		d.StopScreensaver()
+	})
+}
+
+func (d *Daemon) cancelScheduledDismissal() {
+	d.dismissMu.Lock()
+	defer d.dismissMu.Unlock()
+
+	d.dismissGeneration++
+	if d.dismissTimer != nil {
+		d.dismissTimer.Stop()
+		d.dismissTimer = nil
+	}
 }
 
 // onIdle handles idle timeout (launch screensaver)
@@ -423,6 +502,10 @@ func (d *Daemon) LaunchScreensaver() {
 		}
 		return
 	}
+
+	// idle.min_duration is measured from this launch. A resume before it
+	// elapses only schedules the dismissal.
+	d.screensaverStarted.Store(time.Now().UnixNano())
 
 	// Get validated screensaver command
 	terminal, args, err := d.config.GetScreensaverCommand()
@@ -604,6 +687,9 @@ func (d *Daemon) getCompositor() compositor.Compositor {
 
 // StopScreensaver stops the screensaver
 func (d *Daemon) StopScreensaver() {
+	d.stopMu.Lock()
+	defer d.stopMu.Unlock()
+
 	if d.debug {
 		log.Println("StopScreensaver called")
 	}
@@ -627,6 +713,7 @@ func (d *Daemon) StopScreensaver() {
 // Shutdown cleans up resources
 func (d *Daemon) Shutdown() {
 	d.cancel()
+	d.cancelScheduledDismissal()
 
 	// Stop screensaver
 	d.StopScreensaver()

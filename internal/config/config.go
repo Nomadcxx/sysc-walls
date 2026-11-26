@@ -39,6 +39,16 @@ func FindDisplayBinary() (string, error) {
 	return findDisplayBinary(executablePath, homeDir)
 }
 
+// systemDisplayLocations are the last places findDisplayBinary looks. Only
+// absolute paths: the daemon runs the lookup at every idle event and the user
+// unit starts in the home directory, so a relative entry would run whatever
+// file named sysc-walls-display landed there (audit sysc-2366). Development
+// builds sit beside the daemon and are found by the first lookup.
+var systemDisplayLocations = []string{
+	"/usr/bin/sysc-walls-display",
+	"/usr/local/bin/sysc-walls-display",
+}
+
 func findDisplayBinary(executablePath, homeDir string) (string, error) {
 	if executablePath != "" {
 		if resolved, err := filepath.EvalSymlinks(executablePath); err == nil {
@@ -61,14 +71,7 @@ func findDisplayBinary(executablePath, homeDir string) (string, error) {
 		return path, nil
 	}
 
-	// Keep the working-directory lookup last; it is useful for development but
-	// systemd services do not have a meaningful repository working directory.
-	locations := []string{
-		"/usr/bin/sysc-walls-display",
-		"/usr/local/bin/sysc-walls-display",
-		"./sysc-walls-display",
-	}
-	for _, loc := range locations {
+	for _, loc := range systemDisplayLocations {
 		if path, err := exec.LookPath(loc); err == nil {
 			return path, nil
 		}

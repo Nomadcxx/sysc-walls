@@ -131,3 +131,6 @@ sysc-Go/
 src/
 *.bak/
 sysc-Go.bak/
+
+# Installer built for a manual install (see README)
+/install-sysc-walls

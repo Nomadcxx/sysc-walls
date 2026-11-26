@@ -621,6 +621,19 @@ func stopDaemon(m *model) error {
 }
 
 func buildBinaries(m *model) error {
+	if os.Geteuid() == 0 {
+		_, uid, gid, err := resolveUserHome()
+		if err != nil {
+			return fmt.Errorf("failed to resolve the target desktop user: %v", err)
+		}
+		source, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("cannot find the source checkout: %v", err)
+		}
+		if err := checkSourceTree(source, uid, gid); err != nil {
+			return fmt.Errorf("refusing to build as root: %v", err)
+		}
+	}
 	components := []string{"daemon", "display", "client"}
 
 	// Create bin directory if it doesn't exist

@@ -3,56 +3,45 @@ package systemd
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
 	"github.com/Nomadcxx/sysc-walls/internal/config"
 )
 
-// spawnFakeScreensaver starts a process whose command line looks like a real
-// screensaver instance: "kitty ... --class ... sysc-walls-screensaver".
-//
-// The class name is assembled from two halves inside the shell so that this
-// helper's own command line cannot match the sweep pattern — otherwise pkill
-// would match the helper and the test would pass for the wrong reason.
-func spawnFakeScreensaver(t *testing.T) *exec.Cmd {
+// spawnAs starts sh under a symlink named name, so its argv[0] is that name,
+// with extra as the arguments after the script. The script does not end in a
+// bare command, so the shell stays the process instead of exec'ing sleep.
+func spawnAs(t *testing.T, name string, extra ...string) *exec.Cmd {
 	t.Helper()
-
-	script := `exec -a "kitty --start-as=fullscreen --class sysc-walls-scr""eensaver /usr/local/bin/sysc-walls-display" sleep 300`
-
-	cmd := exec.Command("bash", "-c", script)
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("failed to spawn fake screensaver: %v", err)
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("no sh")
 	}
-
+	link := filepath.Join(t.TempDir(), name)
+	if err := os.Symlink(sh, link); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(link, append([]string{"-c", "sleep 300; :"}, extra...)...)
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to spawn %s: %v", name, err)
+	}
 	t.Cleanup(func() {
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 	})
-
-	// Wait for the exec to actually land, rather than assuming it has. Under
-	// load — the whole suite running in parallel, for instance — a fixed
-	// sleep is not enough, and a process still showing its raw shell command
-	// line does not match the sweep pattern, so the test would fail for a
-	// reason that has nothing to do with the code under test.
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		spoofed := strings.Contains(readCmdline(t, cmd.Process.Pid), "sysc-walls-screensaver")
-		if spoofed {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("fake screensaver never took on the spoofed command line; got %q", readCmdline(t, cmd.Process.Pid))
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
 	return cmd
+}
+
+// spawnFakeScreensaver starts a process whose argv is laid out like a real
+// screensaver instance: kitty, then --class and the class, then the display.
+func spawnFakeScreensaver(t *testing.T) *exec.Cmd {
+	t.Helper()
+	return spawnAs(t, "kitty", "--class", "sysc-walls-screensaver", "/usr/local/bin/sysc-walls-display")
 }
 
 // readCmdline returns a process's command line with NUL separators turned into
@@ -137,31 +126,47 @@ func TestCleanupOrphans_LeavesUnrelatedProcessesAlone(t *testing.T) {
 	}
 
 	// A kitty window with a different class: same terminal, different app.
-	bystander := exec.Command("bash", "-c", `exec -a "kitty --class my-regular-term" sleep 300`)
-	if err := bystander.Start(); err != nil {
-		t.Fatalf("failed to spawn bystander: %v", err)
+	// And a shell or grep whose command line mentions the screensaver, which
+	// the old pkill -f pattern matched and killed (audit sysc-2365).
+	bystanders := []*exec.Cmd{
+		spawnAs(t, "kitty", "--class", "my-regular-term"),
+		spawnAs(t, "grep", "kitty --start-as=fullscreen --class sysc-walls-screensaver"),
+		spawnAs(t, "zsh", "--class", "sysc-walls-screensaver"),
 	}
-	t.Cleanup(func() {
-		_ = bystander.Process.Kill()
-		_ = bystander.Wait()
-	})
-	deadline := time.Now().Add(5 * time.Second)
-	for !strings.Contains(readCmdline(t, bystander.Process.Pid), "my-regular-term") {
-		if time.Now().After(deadline) {
-			t.Fatalf("bystander never took on its spoofed command line; got %q", readCmdline(t, bystander.Process.Pid))
+	for _, b := range bystanders {
+		if !processRunning(b.Process.Pid) {
+			t.Fatalf("precondition failed: bystander %d is not running", b.Process.Pid)
 		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	if !processRunning(bystander.Process.Pid) {
-		t.Fatalf("precondition failed: bystander is not running")
 	}
 
 	NewSystemD(config.NewConfig()).CleanupOrphans()
 	time.Sleep(300 * time.Millisecond)
 
-	if !processRunning(bystander.Process.Pid) {
-		t.Errorf("CleanupOrphans() killed PID %d, an unrelated kitty window", bystander.Process.Pid)
+	for _, b := range bystanders {
+		if !processRunning(b.Process.Pid) {
+			t.Errorf("CleanupOrphans() killed PID %d (%q), an unrelated process", b.Process.Pid, readCmdline(t, b.Process.Pid))
+		}
+	}
+}
+
+func TestIsScreensaverArgv(t *testing.T) {
+	for _, tc := range []struct {
+		argv []string
+		want bool
+	}{
+		{[]string{"kitty", "--start-as=fullscreen", "--class", "sysc-walls-screensaver", "/usr/local/bin/sysc-walls-display"}, true},
+		{[]string{"/usr/bin/kitty", "--class=sysc-walls-screensaver", "x"}, true},
+		{[]string{"xterm", "--class", "sysc-walls-screensaver", "x"}, false},
+		{[]string{"kitty", "--class", "my-regular-term", "x"}, false},
+		{[]string{"kitty", "--class"}, false},
+		{[]string{"grep", "kitty.*--class.*sysc-walls-screensaver"}, false},
+		{[]string{"zsh", "-c", "pkill -f kitty --class sysc-walls-screensaver"}, false},
+		{[]string{"kitty --class sysc-walls-screensaver /usr/local/bin/sysc-walls-display"}, false},
+		{[]string{"vim", "--class", "sysc-walls-screensaver", "x"}, false},
+	} {
+		if got := isScreensaverArgv(tc.argv); got != tc.want {
+			t.Errorf("isScreensaverArgv(%q) = %v, want %v", tc.argv, got, tc.want)
+		}
 	}
 }
 

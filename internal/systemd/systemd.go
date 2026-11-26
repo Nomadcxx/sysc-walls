@@ -4,6 +4,7 @@ package systemd
 import (
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"sync"
 	"syscall"
@@ -83,24 +84,22 @@ func (s *SystemD) LaunchScreensaver(terminal string, args []string, outputName s
 	return nil
 }
 
-// screensaverClassPattern matches the command line of a screensaver instance
-// as built by GetScreensaverCommand: the terminal, then --class, then the
-// class name. It is deliberately specific so the sweep cannot hit unrelated
-// windows.
-const screensaverClassPattern = "kitty.*--class.*sysc-walls-screensaver"
-
 // sweepOrphanedScreensavers kills any screensaver instance this process is
-// not tracking. It must never fail a caller: a sweep that cannot run is not a
-// reason to refuse launching a screensaver.
+// not tracking. It matches the exact argument layout the daemon launches
+// (isScreensaverArgv), owned by this user, so it cannot signal an unrelated
+// process whose command line only mentions the class. It must never fail a
+// caller: a sweep that cannot run is not a reason to refuse launching a
+// screensaver.
 func (s *SystemD) sweepOrphanedScreensavers() {
 	if s.config.IsDebug() {
 		log.Println("Sweeping for untracked screensaver instances")
 	}
-
-	// pkill exits 1 when nothing matched, which is the common case and is not
-	// worth surfacing.
-	killCmd := exec.Command("pkill", "-f", screensaverClassPattern)
-	_ = killCmd.Run()
+	for _, pid := range screensaverPIDs("/proc", os.Getuid(), os.Getpid()) {
+		if s.config.IsDebug() {
+			log.Printf("Stopping untracked screensaver PID %d", pid)
+		}
+		_ = syscall.Kill(pid, syscall.SIGTERM)
+	}
 }
 
 // CleanupOrphans removes screensaver instances left behind by a previous run.
@@ -122,7 +121,7 @@ func (s *SystemD) StopScreensaver() error {
 
 	if len(s.processes) == 0 {
 		if s.config.IsDebug() {
-			log.Println("No tracked processes, trying pkill anyway")
+			log.Println("No tracked processes, sweeping anyway")
 		}
 		// Sweep for instances this daemon is not tracking. Screensaver children
 		// are started with Setpgid, so they survive an abrupt end to the daemon

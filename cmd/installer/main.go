@@ -775,11 +775,65 @@ func resolveUserHome() (homeDir string, uid, gid int, err error) {
 func nextFreeBackupPath(configPath string) string {
 	backupPath := configPath + ".backup"
 	for i := 1; ; i++ {
-		if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		// Lstat, so a dangling symlink is treated as occupied. Stat would
+		// report it missing and the backup write would follow it.
+		if _, err := os.Lstat(backupPath); os.IsNotExist(err) {
 			return backupPath
 		}
 		backupPath = fmt.Sprintf("%s.backup.%d", configPath, i)
 	}
+}
+
+// rejectSymlinkedComponents refuses a path when any component between root and
+// path is a symlink. The installer may run as root against a user's home, so a
+// link planted in the config tree must not redirect a privileged mkdir, chown,
+// or write outside it.
+func rejectSymlinkedComponents(root, path string) error {
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return fmt.Errorf("resolve installer path %s: %w", path, err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("installer path %s is outside the home directory", path)
+	}
+
+	current := root
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		if part == "." || part == "" {
+			continue
+		}
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if os.IsNotExist(err) {
+			// Nothing below a missing component can exist yet.
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("inspect installer path %s: %w", current, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("refusing to install through symlink %s", current)
+		}
+	}
+	return nil
+}
+
+// writeConfigFileNoFollow writes path without following a symlink planted
+// after the component check.
+func writeConfigFileNoFollow(path string, data []byte, perm os.FileMode) error {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|syscall.O_NOFOLLOW, perm)
+	if err != nil {
+		return err
+	}
+	_, writeErr := file.Write(data)
+	if writeErr == nil {
+		writeErr = file.Sync()
+	}
+	closeErr := file.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	return closeErr
 }
 
 func updateConfig(m *model) error {
@@ -802,6 +856,10 @@ func updateConfig(m *model) error {
 	}
 	if !filepath.IsAbs(homeDir) {
 		return fmt.Errorf("home directory is not absolute path: %s", homeDir)
+	}
+
+	if err := rejectSymlinkedComponents(homeDir, configDir); err != nil {
+		return err
 	}
 
 	// Create config directory if it doesn't exist
@@ -828,6 +886,9 @@ func updateConfig(m *model) error {
 
 	// Create ASCII art directory
 	asciiDir := filepath.Join(configDir, "ascii")
+	if err := rejectSymlinkedComponents(homeDir, asciiDir); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(asciiDir, 0755); err != nil {
 		return fmt.Errorf("failed to create ASCII art directory %s: %v", asciiDir, err)
 	}
@@ -852,6 +913,12 @@ func updateConfig(m *model) error {
 
 		srcPath := filepath.Join(asciiSourceDir, entry.Name())
 		dstPath := filepath.Join(asciiDir, entry.Name())
+		// The final name is safe to leave alone: O_EXCL below never follows
+		// an existing file or dangling symlink, and skipping it preserves a
+		// user's custom art.
+		if err := rejectSymlinkedComponents(homeDir, filepath.Dir(dstPath)); err != nil {
+			return err
+		}
 		srcData, err := os.ReadFile(srcPath)
 		if err != nil {
 			return fmt.Errorf("failed to read bundled ASCII art %s: %w", srcPath, err)
@@ -977,6 +1044,10 @@ kitty = true
 fullscreen = true
 `
 
+	if err := rejectSymlinkedComponents(homeDir, configPath); err != nil {
+		return err
+	}
+
 	// Check if config file exists
 	configFileExists := false
 	if _, err := os.Stat(configPath); err == nil {
@@ -993,13 +1064,26 @@ fullscreen = true
 		// A fixed name means a second run overwrites the only copy of the
 		// user's real settings with the defaults the first run left behind.
 		backupPath := nextFreeBackupPath(configPath)
+		if err := rejectSymlinkedComponents(homeDir, filepath.Dir(backupPath)); err != nil {
+			return err
+		}
 
 		data, err := os.ReadFile(configPath)
 		if err != nil {
 			return fmt.Errorf("failed to read existing config: %v", err)
 		}
 
-		if err := os.WriteFile(backupPath, data, 0644); err != nil {
+		backupFile, err := os.OpenFile(backupPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0644)
+		if err != nil {
+			return fmt.Errorf("failed to create backup: %v", err)
+		}
+		if _, err := backupFile.Write(data); err != nil {
+			backupFile.Close()
+			_ = os.Remove(backupPath)
+			return fmt.Errorf("failed to create backup: %v", err)
+		}
+		if err := backupFile.Close(); err != nil {
+			_ = os.Remove(backupPath)
 			return fmt.Errorf("failed to create backup: %v", err)
 		}
 
@@ -1015,7 +1099,7 @@ fullscreen = true
 	}
 
 	// Write new config
-	if err := os.WriteFile(configPath, []byte(defaultConfig), 0644); err != nil {
+	if err := writeConfigFileNoFollow(configPath, []byte(defaultConfig), 0644); err != nil {
 		return fmt.Errorf("failed to write config to %s: %v", configPath, err)
 	}
 

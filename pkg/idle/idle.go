@@ -34,12 +34,14 @@ type IdleDetector struct {
 	// happens, because nothing else in the process will notice.
 	lostChan chan struct{}
 
-	// hasActivity records whether anything at all can report a resume event:
-	// the Wayland listener, the X11 poller, or an evdev device. It is
-	// separate from nativeIdle, which only records sources that report idle on
-	// their own. The caller needs both, because a screensaver launched with
-	// no way to report activity cannot be dismissed once it is up.
-	hasActivity atomic.Bool
+	// Activity sources are tracked separately so losing one can be recomputed
+	// instead of leaving a stale true behind. A screensaver launched with no
+	// remaining way to report activity cannot be dismissed once it is up.
+	// nativeIdle is different: it only records sources that report idle on
+	// their own, and the caller needs both answers.
+	waylandActivity atomic.Bool
+	x11Activity     atomic.Bool
+	inputActivity   atomic.Int32
 
 	// lastResumeSignal coalesces resume events. See signalResume.
 	lastResumeSignal time.Time
@@ -154,9 +156,26 @@ func (d *IdleDetector) signalResume() {
 	}
 }
 
-// markHasActivity records that a resume-capable source is running.
-func (d *IdleDetector) markHasActivity() {
-	d.hasActivity.Store(true)
+// markWaylandActivity records that the Wayland listener can report resume.
+func (d *IdleDetector) markWaylandActivity() {
+	d.waylandActivity.Store(true)
+}
+
+// markX11Activity records that the X11 poller can report resume.
+func (d *IdleDetector) markX11Activity() {
+	d.x11Activity.Store(true)
+}
+
+// markInputDeviceActivity records one open evdev monitor as an activity source.
+func (d *IdleDetector) markInputDeviceActivity() {
+	d.inputActivity.Add(1)
+}
+
+// clearInputDeviceActivity drops one evdev monitor that has stopped reading.
+func (d *IdleDetector) clearInputDeviceActivity() {
+	if d.inputActivity.Add(-1) < 0 {
+		d.inputActivity.Store(0)
+	}
 }
 
 // HasActivitySource reports whether any running source can emit a resume
@@ -170,7 +189,7 @@ func (d *IdleDetector) markHasActivity() {
 //
 // Valid once Start has returned.
 func (d *IdleDetector) HasActivitySource() bool {
-	return d.hasActivity.Load()
+	return d.waylandActivity.Load() || d.x11Activity.Load() || d.inputActivity.Load() > 0
 }
 
 // Start starts the idle detector
@@ -292,7 +311,7 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 	d.setNativeIdleSource(SourceWaylandIdleNotify)
 
 	// The compositor's resumed event is the primary activity signal.
-	d.markHasActivity()
+	d.markWaylandActivity()
 
 	// If that event loop ever ends without the detector being stopped, the
 	// source is gone. Clear it and tell the caller, because the fallback
@@ -301,6 +320,7 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 	if setter, ok := detector.(interface{ SetOnLost(func()) }); ok {
 		setter.SetOnLost(func() {
 			d.clearNativeIdleSource()
+			d.waylandActivity.Store(false)
 			d.reportLost()
 		})
 	}
@@ -314,6 +334,7 @@ func (d *IdleDetector) startWaylandIdleDetection(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
 		detector.Stop()
+		d.waylandActivity.Store(false)
 	}()
 
 	return nil
@@ -360,7 +381,7 @@ func (d *IdleDetector) startX11Monitor(ctx context.Context) {
 	// xprintidle reports real idle time, so the poller emits idle events on
 	// its own once the configured timeout elapses
 	d.setNativeIdleSource(SourceX11Xprintidle)
-	d.markHasActivity()
+	d.markX11Activity()
 
 	// Start xprintidle monitoring in a goroutine
 	go func() {
@@ -548,16 +569,17 @@ func discoverInputDevices() ([]string, error) {
 // monitorDevice monitors a single input device for events
 func (d *IdleDetector) monitorDevice(ctx context.Context, devicePath string, activityChan chan<- struct{}) {
 	device, err := evdev.Open(devicePath)
-	if err == nil {
-		// This device is really being watched, so a resume can arrive.
-		d.markHasActivity()
-	}
 	if err != nil {
 		if d.config.IsDebug() {
 			log.Printf("Failed to open device %s: %v", devicePath, err)
 		}
 		return
 	}
+	// This device is really being watched, so a resume can arrive. Drop it
+	// again when the read loop exits, or a lost Wayland source would still see
+	// a stale activity source that no longer exists.
+	d.markInputDeviceActivity()
+	defer d.clearInputDeviceActivity()
 	defer device.File.Close()
 
 	if d.config.IsDebug() {

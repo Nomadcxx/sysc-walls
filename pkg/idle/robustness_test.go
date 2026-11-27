@@ -172,12 +172,36 @@ func TestHasActivitySourceDefaultsFalse(t *testing.T) {
 	}
 }
 
-// TestMarkHasActivitySticks confirms the flag is set once a monitor starts.
-func TestMarkHasActivitySticks(t *testing.T) {
+// TestMarkInputDeviceActivitySticks confirms an open evdev monitor counts as
+// an activity source until its read loop exits.
+func TestMarkInputDeviceActivitySticks(t *testing.T) {
 	d := NewIdleDetector(testConfig(t))
-	d.markHasActivity()
+	d.markInputDeviceActivity()
 	if !d.HasActivitySource() {
-		t.Error("HasActivitySource() = false after markHasActivity()")
+		t.Error("HasActivitySource() = false after an input device started")
+	}
+	d.clearInputDeviceActivity()
+	if d.HasActivitySource() {
+		t.Error("HasActivitySource() = true after the last input device stopped")
+	}
+}
+
+// TestLosingWaylandActivityIsRecomputed is the regression test for #94: when
+// the Wayland listener dies and no evdev device replaced it, the detector must
+// report that nothing can observe resume any more.
+func TestLosingWaylandActivityIsRecomputed(t *testing.T) {
+	d := NewIdleDetector(testConfig(t))
+	d.markWaylandActivity()
+	d.markX11Activity()
+
+	d.waylandActivity.Store(false)
+	if !d.HasActivitySource() {
+		t.Error("HasActivitySource() = false while the X11 poller is still running")
+	}
+
+	d.x11Activity.Store(false)
+	if d.HasActivitySource() {
+		t.Error("HasActivitySource() = true after every activity source stopped")
 	}
 }
 

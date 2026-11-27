@@ -2,7 +2,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -280,43 +279,78 @@ func buildDisplayArgs(cfg *config.Config, overrides []string) []string {
 	return args
 }
 
-// runDisplayForeground runs the display binary in foreground with optional timeout
+// displayTerminateGrace bounds how long the display process gets to restore
+// the terminal after SIGTERM. A process that ignores the signal is killed, but
+// the graceful signal is always sent first so the deferred restore can run.
+var displayTerminateGrace = 2 * time.Second
+
+// runDisplayForeground runs the display binary in foreground with optional timeout.
+//
+// The child owns the terminal restore sequence, so it is stopped with SIGTERM
+// and given a bounded grace period instead of being killed by context
+// cancellation. A hard kill would leave the cursor hidden.
 func runDisplayForeground(binary string, args []string, timeout time.Duration) {
-	ctx := context.Background()
-	var cancel context.CancelFunc
-
-	if timeout > 0 {
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-	}
-
-	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd := exec.Command(binary, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error running display: %v\n", err)
+		os.Exit(1)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
 	// Handle Ctrl+C gracefully
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
 
-	go func() {
-		<-sigChan
-		if cancel != nil {
-			cancel()
-		}
-		if cmd.Process != nil {
-			cmd.Process.Signal(syscall.SIGTERM)
-		}
-	}()
+	var timeoutC <-chan time.Time
+	if timeout > 0 {
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+		timeoutC = timer.C
+	}
 
-	if err := cmd.Run(); err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			fmt.Println("\nPreview completed")
-		} else if ctx.Err() == context.Canceled {
-			fmt.Println("\nStopped by user")
-		} else {
+	message := ""
+	select {
+	case err := <-done:
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error running display: %v\n", err)
 			os.Exit(1)
 		}
+		return
+	case <-timeoutC:
+		message = "\nPreview completed"
+	case <-sigChan:
+		message = "\nStopped by user"
 	}
+
+	stopDisplay(cmd.Process, done)
+	fmt.Println(message)
+}
+
+// stopDisplay asks the display process to shut down cleanly, then kills it if
+// it does not exit within displayTerminateGrace.
+func stopDisplay(process *os.Process, done <-chan error) {
+	if process == nil {
+		return
+	}
+	_ = process.Signal(syscall.SIGTERM)
+
+	timer := time.NewTimer(displayTerminateGrace)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return
+	case <-timer.C:
+	}
+
+	_ = process.Kill()
+	<-done
 }

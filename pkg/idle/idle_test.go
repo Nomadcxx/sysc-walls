@@ -416,10 +416,14 @@ func TestReadXprintidle(t *testing.T) {
 type stubWaylandDetector struct {
 	startErr error
 	stopped  bool
+	onLost   func()
 }
 
 func (s *stubWaylandDetector) Start() error { return s.startErr }
 func (s *stubWaylandDetector) Stop()        { s.stopped = true }
+func (s *stubWaylandDetector) SetOnLost(fn func()) {
+	s.onLost = fn
+}
 
 // TestStartWaylandIdleDetection_FallsBackWhenDetectorFails verifies that a
 // Wayland detector which cannot be created or cannot start hands over to the
@@ -529,5 +533,46 @@ func TestStartWaylandIdleDetection_DoesNotClaimX11InWaylandSession(t *testing.T)
 
 	if got := detector.NativeIdleSource(); got != "" {
 		t.Errorf("NativeIdleSource() = %q in a Wayland session, want empty: the X idle clock does not observe native Wayland input", got)
+	}
+}
+
+// TestWaylandLostClearsActivitySource checks the callback registered for a
+// dropped Wayland event loop: it must clear the activity source before the
+// daemon re-arms its fallback timer (#94).
+func TestWaylandLostClearsActivitySource(t *testing.T) {
+	var stub *stubWaylandDetector
+	original := newWaylandDetector
+	newWaylandDetector = func(time.Duration, bool, func(), func()) (waylandDetector, error) {
+		stub = &stubWaylandDetector{}
+		return stub, nil
+	}
+	t.Cleanup(func() { newWaylandDetector = original })
+
+	detector := NewIdleDetector(config.NewConfig())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := detector.startWaylandIdleDetection(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !detector.waylandActivity.Load() {
+		t.Fatal("Wayland activity source was not recorded after a successful start")
+	}
+	if stub == nil || stub.onLost == nil {
+		t.Fatal("Wayland detector did not register a lost callback")
+	}
+
+	stub.onLost()
+
+	if detector.waylandActivity.Load() {
+		t.Error("Wayland activity source is still set after the detector was lost")
+	}
+	if got := detector.NativeIdleSource(); got != "" {
+		t.Errorf("NativeIdleSource() = %q after loss, want empty", got)
+	}
+	select {
+	case <-detector.Events().Lost:
+	case <-time.After(time.Second):
+		t.Error("lost callback did not wake the daemon")
 	}
 }
